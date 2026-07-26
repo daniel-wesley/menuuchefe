@@ -1,0 +1,3 @@
+esta dando erro quando vou cancelar produto do mesmo tipo 
+
+colocar relatorio de vendas por garçom

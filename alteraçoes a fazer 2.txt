@@ -1,0 +1,75 @@
+AJUSTAR PARA LANÇAR PRIMEIRO O PRUDTO E DEPOIS AS PERGUNTAS
+ALTENTICAR APENAS UM USUARIO POR DISPOSITIVO
+GARÇOM NÃO PODE VISUALIZAR A TELA DE CAIXA
+
+1. Cadastro da Empresa
+Ação:Na tela Admin Crie um botão  chamado Loja com campos de texto para coletar o Nome Fantasia, Telefone/WhatsApp, CNPJ e Endereço.
+
+Lógica: Ao salvar, armazene esses dados em um objeto único dentro do seu arquivo JSON local. Eles serão usados fixos no cabeçalho de todos os relatórios e cupons. FEITO
+
+
+2. Opção de Colocar Mais Mesas
+Ação: Crie um botão "Adicionar Mesa" na tela de ADMINISTRADOR. FEITO
+
+Lógica: O sistema abre um campo para digitar o número ou nome da nova mesa. Ao confirmar, o sistema valida se esse número já existe no seu array local de mesas. Se não existir, ele adiciona e atualiza a tela de salão dinamicamente.
+
+3. Opção de Gorjeta (Colocar / Tirar)
+Ação: Na tela de fechamento da conta da mesa, adicione um botão tipo "Checkox" ou "Switch" (Ativar/Desativar Gorjeta).
+
+Lógica: Por padrão, o sistema calcula os 10% sobre o subtotal dos produtos. Se o operador desmarcar a opção, o sistema zera o valor do campo "Gorjeta" e subtrai esse valor do "Total Geral" em tempo real na tela, antes de salvar a venda.
+
+4. Inserir CPF na Tela de Recebimento
+Ação: Na mesma tela de pagamento, inclua um campo de texto opcional chamado "CPF na Nota?".
+
+Lógica: Se o cliente informar, o sistema salva essa string de texto junto com os dados daquela venda específica no histórico local, permitindo que ela saia impressa no cupom do cliente.
+
+5 e 6. Relatórios de Vendas e Gorjetas por Vendedor
+Ação: Na aba de relatórios, o administrador seleciona o nome do vendedor (garçom).
+
+Lógica: O sistema faz uma busca (filtro) em todo o histórico de vendas offline onde o nome daquele vendedor aparece. Ele soma duas colunas separadamente: a coluna de "Subtotal" (gerando o relatório de vendas de produtos) e a coluna de "Gorjeta" (gerando o relatório de quanto ele acumulou de caixinha).
+
+7.: Como gerar a Chave (No seu PC)
+Pegue os dados: Una os números do CNPJ/CPF da loja + o Mês/Ano que ele pagou + uma Palavra Secreta sua.
+
+Gere o código: O sistema transforma essa mistura em um código de 12 dígitos.
+
+Envie ao cliente: Essa é a senha mensal dele.
+
+Passo 2: Como o sistema do cliente valida (Offline)
+O cliente digita a chave na tela.
+
+O sistema faz a mesma conta usando o CNPJ/CPF cadastrado na máquina dele.
+
+Se os códigos forem iguais, o sistema salva a nova Data de Vencimento (ex: 30/06/2026) e zera qualquer bloqueio.
+
+Passo 3: A Regra do Vencimento e os Dias de Tolerância (2 a 5 dias)
+Para dar os dias extras sem que o cliente precise digitar uma chave imediatamente, crie um botão na tela de bloqueio chamado "Liberar Prazo de Emergência".
+
+A lógica na inicialização do sistema funciona assim:
+
+A data venceu? O sistema calculou que a data de hoje passou da data de vencimento da licença.
+
+Tela de Bloqueio: O sistema bloqueia as vendas e mostra a mensagem: "Sua licença venceu!".
+
+Botão de Emergência: Abaixo do campo da chave, fica o botão de prazo extra. Quando o cliente clica nele, o sistema verifica no banco local se ele já usou o prazo de emergência desse mês.
+
+Se já usou: O botão fica desativado e exibe: "Prazo de emergência já utilizado este mês. Insira a nova chave."
+
+Se NÃO usou: O sistema pergunta ao operador: "Deseja ativar o prazo de 3 dias de tolerância?" (Você escolhe fixo entre 2 e 5 dias no seu código).
+
+Liberação temporária: Ao confirmar, o sistema grava no arquivo local que a emergência foi ativada e soma +3 dias na data atual do computador, permitindo que o restaurante funcione normalmente por esse período curto até você mandar a chave definitiva.
+
+8. Menu e Submenu Simplificado
+Ação: Na tela de pedidos, em vez de listar todos os sabores de refrigerante misturados, você cria o produto principal "Refrigerante Lata".
+
+Lógica: Ao clicar em "Refrigerante Lata", o sistema abre uma pequena janela flutuante (modal) ou um painel lateral mostrando apenas as opções de sabores (Coca-Cola, Guaraná, Fanta). O operador escolhe o sabor, e o sistema joga para o carrinho o item específico com o seu respectivo preço.
+
+9. Opção de Troca de Produto
+Ação: Dentro de uma comanda ou venda que ainda está aberta, adicione um botão "Trocar Item" ao lado do produto lançado.
+
+Lógica: O operador seleciona o produto que foi lançado errado e clica em trocar. O sistema remove esse item do carrinho, abre o menu para selecionar o novo produto e adiciona o novo item. No final, o sistema refaz a conta automaticamente: atualiza o subtotal, recalcula a gorjeta (se estiver ativa) e atualiza o total geral.
+
+10 colocar a informação NÃO É VALIDO COM CUPOM FISCAL
+
+CRIAR QRCODE COM IP E A PORTA PARA O CELULAR DO GARÇOM CONECTAR AO SISTEMA, SEM A NESECIDADE DE ELE DIGITAR O IP E A PORTA feit0
+

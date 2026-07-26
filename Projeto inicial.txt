@@ -1,0 +1,136 @@
+Crie um sistema completo de restaurante responsivo que funcione em celular, tablet e computador.
+
+O sistema deve ser moderno, rápido e simples de usar.
+
+Tecnologias:
+
+- Frontend: React
+- Backend: Node.js com Express
+- Comunicação em tempo real: Socket.io
+- Banco de dados: SQLite
+- Estilo: TailwindCSS
+
+Funcionalidades obrigatórias:
+
+1. Login
+
+- Tela de login
+- Diferentes níveis:
+   - administrador
+   - garçom
+   - cozinha
+
+2. Mesas
+
+- Cadastro de mesas
+- Abrir mesa
+- Fechar mesa
+- Status:
+   - livre
+   - ocupada
+   - aguardando pagamento
+
+3. Cardápio
+
+- Categorias:
+   - lanches
+   - pizzas
+   - bebidas
+   - sobremesas
+- Produto com:
+   - nome
+   - preço
+   - descrição
+   - imagem
+- Busca de produtos
+
+4. Pedidos
+
+- Adicionar itens ao pedido
+- Alterar quantidade
+- Observações:
+   - sem cebola
+   - ponto da carne
+   - adicionais
+- Enviar pedido
+
+5. Cozinha
+
+- Tela da cozinha em tempo real
+- Novos pedidos aparecem automaticamente
+- Sons de notificação
+- Alterar status:
+   - recebido
+   - preparando
+   - pronto
+   - entregue
+
+6. Impressão
+
+- Compatível com impressora térmica ESC/POS
+- Impressão automática dos pedidos
+- Layout de cupom simples e legível
+
+7. Caixa
+
+- Total da mesa
+- Separar contas
+- Métodos de pagamento:
+   - dinheiro
+   - cartão
+   - pix
+- Fechamento diário
+
+8. Painel administrativo
+
+- Relatório de vendas
+- Produtos mais vendidos
+- Controle de usuários
+- Controle de estoque simples
+
+9. Interface
+
+- Design moderno
+- Modo escuro
+- Responsivo
+- Botões grandes para celular
+
+10. Estrutura do projeto
+Organize em:
+
+- frontend
+- backend
+- database
+
+11. Backend
+Crie:
+
+- rotas API
+- controllers
+- services
+- banco de dados
+- autenticação JWT
+
+12. Frontend
+Crie:
+
+- páginas
+- componentes reutilizáveis
+- navegação
+- estados globais
+
+13. Extras
+
+- Gerar QR Code da mesa
+- Cliente pode visualizar cardápio pelo celular
+- Atualização em tempo real
+- Sistema preparado para funcionar em rede local
+
+Crie também:
+
+- README de instalação
+- scripts npm
+- variáveis de ambiente
+- estrutura profissional de pastas
+
+Quero o projeto completo e pronto para rodar.
