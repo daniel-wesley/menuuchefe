@@ -2,8 +2,8 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 
 const AuthContext = createContext(null);
 
-// In production, use VITE_API_URL env var. In dev, auto-detect the local server.
-export const API_BASE = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:3001`;
+// In production, use VITE_API_URL env var if set. Otherwise fallback to current origin in PROD or local server in DEV.
+export const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : `http://${window.location.hostname}:3001`);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);

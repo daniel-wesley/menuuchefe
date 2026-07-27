@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 import dotenv from 'dotenv';
 
 import { initializeDatabase } from './config/db.js';
@@ -73,10 +74,30 @@ app.get('/api/device-ip', (req, res) => {
   res.json({ ip: LOCAL_IP });
 });
 
-// Root route check
-app.get('/', (req, res) => {
+// Root route check if no static frontend build is present
+app.get('/api/health', (req, res) => {
   res.json({ message: 'API do Restaurante funcionando com sucesso!' });
 });
+
+// Serve static frontend build (React) for production unified hosting
+const distPath = path.join(process.cwd(), '../frontend/dist');
+const localDistPath = path.join(process.cwd(), 'frontend/dist');
+const staticPath = fs.existsSync(distPath) ? distPath : (fs.existsSync(localDistPath) ? localDistPath : null);
+
+if (staticPath) {
+  console.log(`📦 Servidor configurado para entregar o Frontend estático de: ${staticPath}`);
+  app.use(express.static(staticPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(path.join(staticPath, 'index.html'));
+  });
+} else {
+  app.get('/', (req, res) => {
+    res.json({ message: 'API do Restaurante funcionando com sucesso! (Frontend não compilado)' });
+  });
+}
 
 // Socket.io event handling
 io.on('connection', (socket) => {
