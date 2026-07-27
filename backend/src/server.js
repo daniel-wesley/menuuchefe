@@ -24,6 +24,9 @@ import { checkLicense, checkModuloGeral } from './middleware/checkLicense.js';
 
 dotenv.config();
 
+const PORT = process.env.PORT || 3001;
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+
 const app = express();
 const server = http.createServer(app);
 
@@ -144,9 +147,7 @@ function getLocalIpAddress() {
   return 'localhost';
 }
 
-const PORT = process.env.PORT || 3001;
 const LOCAL_IP = getLocalIpAddress();
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 // Initialize DB and start server
 async function startServer() {
