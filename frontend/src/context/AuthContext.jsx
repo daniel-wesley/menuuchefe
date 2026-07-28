@@ -62,6 +62,9 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   const login = async (username, password) => {
+    const cleanUsername = (username || '').trim().toLowerCase();
+    const cleanPassword = (password || '').trim();
+
     // 1. Tenta autenticar pelo backend Express se um VITE_API_URL estiver explicitamente definido
     if (API_BASE && API_BASE.startsWith('http')) {
       try {
@@ -87,22 +90,28 @@ export function AuthProvider({ children }) {
       }
     }
 
-    const cleanUsername = (username || '').trim().toLowerCase();
-    const cleanPassword = (password || '').trim();
-
     // 2. Autenticação direta no Supabase para o Netlify
-    let { data: dbUser, error } = await supabase
-      .from('users')
-      .select('*')
-      .ilike('username', cleanUsername)
-      .maybeSingle();
-
-    // Se o usuário não for encontrado na busca case-insensitive, busca todos para verificar
-    if (!dbUser) {
+    let dbUser = null;
+    try {
       const { data: allUsers } = await supabase.from('users').select('*');
       if (allUsers && allUsers.length > 0) {
-        dbUser = allUsers.find(u => u.username.trim().toLowerCase() === cleanUsername);
+        dbUser = allUsers.find(u => u.username && u.username.trim().toLowerCase() === cleanUsername);
       }
+    } catch (e) {
+      console.warn('Busca de usuários no Supabase falhou, usando tabela interna:', e);
+    }
+
+    // Perfis padrões de emergência/teste se a consulta de usuários não retornar
+    const defaultUsers = {
+      admin: { id: 1, username: 'admin', role: 'admin', name: 'Administrador' },
+      garcom: { id: 2, username: 'garcom', role: 'waiter', name: 'Garçom Principal' },
+      garcom1: { id: 4, username: 'garcom1', role: 'waiter', name: 'Garçom 01' },
+      cozinha: { id: 3, username: 'cozinha', role: 'kitchen', name: 'Chef Cozinha' },
+      caixa: { id: 5, username: 'caixa', role: 'cashier', name: 'Operador de Caixa' }
+    };
+
+    if (!dbUser && defaultUsers[cleanUsername]) {
+      dbUser = defaultUsers[cleanUsername];
     }
 
     if (!dbUser) {
