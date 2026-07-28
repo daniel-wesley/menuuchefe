@@ -28,82 +28,87 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      try {
-        const response = await fetch(`${API_BASE}/api/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+      if (API_BASE && API_BASE.startsWith('http')) {
+        try {
+          const response = await fetch(`${API_BASE}/api/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
 
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData);
-          localStorage.setItem('restaurant_user', JSON.stringify(userData));
-        } else {
-          const savedUser = localStorage.getItem('restaurant_user');
-          if (savedUser) {
-            setUser(JSON.parse(savedUser));
-          } else {
-            logout();
+          if (response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+              const userData = await response.json();
+              setUser(userData);
+              localStorage.setItem('restaurant_user', JSON.stringify(userData));
+              setLoading(false);
+              return;
+            }
           }
+        } catch (error) {
+          console.warn('Backend API inacessível.');
         }
-      } catch (error) {
-        console.warn('Backend API inacessível. Usando modo Supabase direto no Netlify.');
-        const savedUser = localStorage.getItem('restaurant_user');
-        if (savedUser) {
-          setUser(JSON.parse(savedUser));
-        }
-      } finally {
-        setLoading(false);
       }
+
+      const savedUser = localStorage.getItem('restaurant_user');
+      if (savedUser) {
+        try { setUser(JSON.parse(savedUser)); } catch (_) {}
+      }
+      setLoading(false);
     }
 
     loadUser();
   }, [token]);
 
   const login = async (username, password) => {
-    // 1. Tenta autenticar pelo backend Express se estiver disponível
-    try {
-      const response = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
+    // 1. Tenta autenticar pelo backend Express se um VITE_API_URL estiver explicitamente definido
+    if (API_BASE && API_BASE.startsWith('http')) {
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('restaurant_token', data.token);
-        localStorage.setItem('restaurant_user', JSON.stringify(data.user));
-        setToken(data.token);
-        setUser(data.user);
-        return data.user;
+        if (response.ok) {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const data = await response.json();
+            localStorage.setItem('restaurant_token', data.token);
+            localStorage.setItem('restaurant_user', JSON.stringify(data.user));
+            setToken(data.token);
+            setUser(data.user);
+            return data.user;
+          }
+        }
+      } catch (err) {
+        console.warn('Backend Express inacessível. Alternando para Supabase direto...');
       }
-    } catch (err) {
-      console.warn('Backend Express inacessível. Autenticando diretamente via Supabase...');
     }
 
-    // 2. Fallback direto no Supabase (Permite login direto no Netlify sem servidor Node)
+    // 2. Autenticação direta no Supabase para o Netlify
     const { data: dbUser, error } = await supabase
       .from('users')
       .select('*')
       .eq('username', username)
-      .single();
+      .maybeSingle();
 
     if (error || !dbUser) {
       throw new Error('Usuário ou senha incorretos.');
     }
 
-    // Validação de senhas padrões ou senha salva no Supabase
     const defaultPasswords = {
       admin: 'admin123',
       garcom: 'garcom123',
+      garcom1: 'garcom123',
       cozinha: 'cozinha123',
       caixa: 'caixa123'
     };
 
     const expectedPass = defaultPasswords[username];
     if (expectedPass && password !== expectedPass) {
-      throw new Error('Senha incorreta.');
+      throw new Error('Usuário ou senha incorretos.');
     }
 
     const userData = {
@@ -130,33 +135,37 @@ export function AuthProvider({ children }) {
 
   // Helper para requisições HTTP ou Supabase direto se a API falhar
   const apiFetch = async (endpoint, options = {}) => {
-    try {
-      const headers = {
-        'Content-Type': 'application/json',
-        ...options.headers
-      };
+    if (API_BASE && API_BASE.startsWith('http')) {
+      try {
+        const headers = {
+          'Content-Type': 'application/json',
+          ...options.headers
+        };
 
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        if (options.body instanceof FormData) {
+          delete headers['Content-Type'];
+        }
+
+        const response = await fetch(`${API_BASE}${endpoint}`, {
+          ...options,
+          headers
+        });
+
+        if (response.ok) {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            return response;
+          }
+        }
+      } catch (err) {
+        console.warn(`Requisição ${endpoint} falhou via fetch, usando fallback Supabase direto...`);
       }
-
-      if (options.body instanceof FormData) {
-        delete headers['Content-Type'];
-      }
-
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers
-      });
-
-      if (response.ok || response.status < 500) {
-        return response;
-      }
-    } catch (err) {
-      console.warn(`Requisição ${endpoint} falhou via fetch, usando fallback Supabase direto...`);
     }
 
-    // Fallback Supabase para rotas comuns
     return handleSupabaseFallback(endpoint, options);
   };
 
