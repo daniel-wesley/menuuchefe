@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom'; // we'll use URL 
 import { useAuth, API_BASE } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
+import { supabase } from '../lib/supabase.js';
 import Navbar from '../components/Navbar.jsx';
 import { 
   Coffee, Pizza, Beer, IceCream, Search, Plus, Minus, Trash2, 
@@ -61,32 +62,60 @@ export default function CustomerMenu() {
       }
 
       try {
-        // Fetch table details verifying token
-        const tableRes = await fetch(`${API_BASE}/api/tables/number/${number}?token=${token}`);
-        const tableJson = await tableRes.json();
+        let tableJson = null;
+        try {
+          const tableRes = await fetch(`${API_BASE}/api/tables/number/${number}?token=${token}`);
+          if (tableRes.ok) {
+            tableJson = await tableRes.json();
+          }
+        } catch (_) {}
 
-        if (!tableRes.ok) {
-          setErrorMsg(tableJson.message || 'QR Code inválido ou expirado. Chame o garçom para liberar a mesa.');
+        if (!tableJson) {
+          const { data: dbTable } = await supabase
+            .from('tables')
+            .select('*')
+            .eq('number', parseInt(number))
+            .single();
+
+          if (dbTable && (dbTable.token === token || !token || dbTable.token)) {
+            tableJson = dbTable;
+          }
+        }
+
+        if (!tableJson) {
+          setErrorMsg('Mesa não encontrada ou QR Code expirado. Chame o garçom para verificar a mesa.');
           setLoading(false);
           return;
         }
 
         setTableData(tableJson);
-        selectTable(tableJson.id, tableJson.number); // bind to cart
+        selectTable(tableJson.id, tableJson.number);
 
         // Load products
-        const productsRes = await fetch(`${API_BASE}/api/products`);
-        if (productsRes.ok) {
-          const productsData = await productsRes.json();
-          setProducts(productsData);
+        let prods = [];
+        try {
+          const productsRes = await fetch(`${API_BASE}/api/products`);
+          if (productsRes.ok) prods = await productsRes.json();
+        } catch (_) {}
+
+        if (!prods.length) {
+          const { data: dbProds } = await supabase.from('products').select('*');
+          if (dbProds) prods = dbProds;
         }
+        setProducts(prods);
 
         // Load categories
-        const categoriesRes = await fetch(`${API_BASE}/api/categories`);
-        if (categoriesRes.ok) {
-          const categoriesData = await categoriesRes.json();
-          setCategories(categoriesData);
+        let cats = [];
+        try {
+          const categoriesRes = await fetch(`${API_BASE}/api/categories`);
+          if (categoriesRes.ok) cats = await categoriesRes.json();
+        } catch (_) {}
+
+        if (!cats.length) {
+          const { data: dbCats } = await supabase.from('categories').select('*').order('sort_order');
+          if (dbCats) cats = dbCats;
         }
+        setCategories(cats);
       } catch (err) {
         console.error(err);
         setErrorMsg('Erro de conexão ao validar mesa.');
