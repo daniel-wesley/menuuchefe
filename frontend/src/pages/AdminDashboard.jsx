@@ -98,6 +98,7 @@ export default function AdminDashboard() {
     category: 'lanches',
     stock: '10',
     track_stock: true,
+    active: true,
     image: null,
     observations: []
   });
@@ -564,6 +565,7 @@ export default function AdminDashboard() {
         category: productForm.category,
         stock: productForm.stock,
         track_stock: productForm.track_stock ? '1' : '0',
+        active: productForm.active ? 1 : 0,
         observations: JSON.stringify(productForm.observations || []),
         image_url: imageUrl,
       };
@@ -593,6 +595,7 @@ export default function AdminDashboard() {
           category: 'lanches',
           stock: '10',
           track_stock: true,
+          active: true,
           image: null,
           observations: []
         });
@@ -618,6 +621,7 @@ export default function AdminDashboard() {
       category: prod.category,
       stock: prod.stock.toString(),
       track_stock: prod.track_stock === 1,
+      active: prod.active !== 0,
       image: null,
       observations: prod.observations ? JSON.parse(prod.observations) : []
     });
@@ -637,27 +641,6 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       console.error('Erro ao excluir produto:', err);
-    }
-  };
-
-  const handleToggleProductActive = async (prod) => {
-    const newActive = prod.active === 0 ? 1 : 0;
-    const label = newActive === 0 ? 'inativar' : 'ativar';
-    if (!confirm(`Deseja ${label} o produto "${prod.name}"?`)) return;
-
-    try {
-      const res = await apiFetch(`/api/products/${prod.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...prod, active: newActive })
-      });
-      if (res.ok) {
-        loadProducts();
-      } else {
-        alert('Erro ao atualizar produto.');
-      }
-    } catch (err) {
-      console.error('Erro ao alternar status do produto:', err);
     }
   };
 
@@ -2301,7 +2284,7 @@ export default function AdminDashboard() {
                 <button
                   onClick={() => {
                     setEditingProduct(null);
-                    setProductForm({ name: '', price: '', description: '', category: 'lanches', stock: '10', track_stock: true, image: null, observations: [] });
+                    setProductForm({ name: '', price: '', description: '', category: 'lanches', stock: '10', track_stock: true, active: true, image: null, observations: [] });
                     setShowProductModal(true);
                   }}
                   className="px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 transition duration-200 shadow-md shadow-brand-500/10"
@@ -2356,17 +2339,13 @@ export default function AdminDashboard() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => handleToggleProductActive(p)}
-                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition ${
-                            p.active === 0
-                              ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-300'
-                              : 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200'
-                          }`}
-                          title={p.active === 0 ? 'Clique para ativar' : 'Clique para inativar'}
-                        >
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          p.active === 0
+                            ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400'
+                            : 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400'
+                        }`}>
                           {p.active === 0 ? 'Inativo' : 'Ativo'}
-                        </button>
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-2">
                         <button
@@ -2977,6 +2956,36 @@ export default function AdminDashboard() {
                     />
                   </div>
                 )}
+              </div>
+
+              {/* Active/Inactive Toggle */}
+              <div className="bg-zinc-50 dark:bg-dark-element/50 border dark:border-dark-border p-4 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-zinc-650 dark:text-dark-text">Produto visível no cardápio?</span>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">Produtos inativos não aparecem para garçom e cliente.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setProductForm({ ...productForm, active: !productForm.active })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+                      productForm.active ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-600'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                      productForm.active ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center space-x-1.5">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    productForm.active
+                      ? 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400'
+                  }`}>
+                    {productForm.active ? 'ATIVO' : 'INATIVO'}
+                  </span>
+                </div>
               </div>
 
               {/* Product Image File Input */}
