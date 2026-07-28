@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { gerarChaveMensal, validarChave } from '../utils/keygen.js';
 import { getLicenca, salvarLicenca } from '../middleware/checkLicense.js';
+import { db } from '../config/db.js';
 
 const dbPath = path.resolve(process.env.DATABASE_FILE || '../database/restaurante.sqlite');
 const dbDir = path.dirname(dbPath);
@@ -26,7 +27,7 @@ function getMesAnoAtual() {
  */
 export async function getLicenseStatus(req, res) {
   try {
-    const licenca = getLicenca();
+    const licenca = await getLicenca();
     const hoje = new Date();
     const dataVencimento = new Date(licenca.vencimento);
     const diasRestantes = Math.ceil((dataVencimento - hoje) / (1000 * 60 * 60 * 24));
@@ -71,7 +72,7 @@ export async function activateLicense(req, res) {
       return res.status(400).json({ message: 'Chave inválida ou não corresponde ao mês atual.' });
     }
 
-    const licenca = getLicenca();
+    const licenca = await getLicenca();
     const novaData = new Date();
     novaData.setDate(novaData.getDate() + resultado.dias);
 
@@ -80,7 +81,7 @@ export async function activateLicense(req, res) {
     licenca.diasLicenciados = resultado.dias;
     licenca.modulo = resultado.modulo || 'BASICO';
     licenca.emergenciaUsadaEsteMes = '';
-    salvarLicenca(licenca);
+    await salvarLicenca(licenca);
 
     const diasRestantes = Math.ceil((novaData - new Date()) / (1000 * 60 * 60 * 24));
 
@@ -101,7 +102,7 @@ export async function activateLicense(req, res) {
  */
 export async function emergencyExtension(req, res) {
   try {
-    const licenca = getLicenca();
+    const licenca = await getLicenca();
     const hoje = new Date();
     const mesAtual = `${hoje.getMonth() + 1}/${hoje.getFullYear()}`;
 
@@ -117,7 +118,7 @@ export async function emergencyExtension(req, res) {
 
     licenca.vencimento = dataVencimento.toISOString();
     licenca.emergenciaUsadaEsteMes = mesAtual;
-    salvarLicenca(licenca);
+    await salvarLicenca(licenca);
 
     const diasRestantes = Math.ceil((dataVencimento - hoje) / (1000 * 60 * 60 * 24));
 

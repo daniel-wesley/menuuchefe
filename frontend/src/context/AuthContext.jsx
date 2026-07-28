@@ -229,18 +229,57 @@ async function handleSupabaseFallback(endpoint, options = {}) {
   }
 
   // ─── LICENSE ──────────────────────────────────────────────────────────────
-  if (endpoint.startsWith('/api/license') && method === 'GET') {
+  if (endpoint === '/api/license/status' && method === 'GET') {
+    const { data: lic } = await supabase.from('licenses').select('*').eq('id', 1).single();
+    if (!lic) return json({ vencimento: null, diasRestantes: 0, bloqueado: true, chaveAtual: '', diasLicenciados: 0, modulo: 'BASICO', emergenciaUsadaEsteMes: '' });
+    const hoje = new Date();
+    const dataVenc = new Date(lic.vencimento);
+    const diasRestantes = Math.ceil((dataVenc - hoje) / (1000 * 60 * 60 * 24));
     return json({
-      vencimento: '2030-12-31',
-      diasRestantes: 365,
-      bloqueado: false,
-      chaveAtual: 'LICENCA_ATIVA_OK',
-      diasLicenciados: 365,
-      modulo: 'GERAL'
+      vencimento: lic.vencimento,
+      diasRestantes: Math.max(0, diasRestantes),
+      bloqueado: hoje > dataVenc,
+      chaveAtual: lic.chave_atual || '',
+      diasLicenciados: lic.dias_licenciados || 0,
+      emergenciaUsadaEsteMes: lic.emergencia_usada_este_mes || '',
+      modulo: lic.modulo || 'BASICO'
     });
   }
-  if (endpoint.includes('/api/license') && method === 'POST') {
-    return json({ success: true, message: 'Licença simulada ativada.' });
+  if (endpoint === '/api/license/activate' && method === 'POST' && bodyData) {
+    const { chave } = bodyData;
+    if (!chave || chave.trim().length < 10) {
+      return json({ message: 'Forneça uma chave válida no formato XXXX-XXXX-XXXX.' }, 400);
+    }
+    const hoje = new Date();
+    const novaData = new Date();
+    novaData.setDate(hoje.getDate() + 30);
+    await supabase.from('licenses').upsert({
+      id: 1,
+      vencimento: novaData.toISOString(),
+      chave_atual: chave.toUpperCase().trim(),
+      dias_licenciados: 30,
+      modulo: 'GERAL',
+      emergencia_usada_este_mes: ''
+    }, { onConflict: 'id' });
+    const diasRestantes = Math.ceil((novaData - hoje) / (1000 * 60 * 60 * 24));
+    return json({ message: 'Licença ativada com sucesso!', vencimento: novaData.toISOString(), diasRestantes });
+  }
+  if (endpoint === '/api/license/emergency' && method === 'POST') {
+    const { data: lic } = await supabase.from('licenses').select('*').eq('id', 1).single();
+    const hoje = new Date();
+    const mesAtual = `${hoje.getMonth() + 1}/${hoje.getFullYear()}`;
+    if (lic && lic.emergencia_usada_este_mes === mesAtual) {
+      return json({ message: 'O prazo de emergência já foi utilizado este mês.', bloqueado: true }, 400);
+    }
+    const dataAtual = lic ? new Date(lic.vencimento) : hoje;
+    dataAtual.setDate(dataAtual.getDate() + 3);
+    await supabase.from('licenses').upsert({
+      id: 1,
+      vencimento: dataAtual.toISOString(),
+      emergencia_usada_este_mes: mesAtual
+    }, { onConflict: 'id' });
+    const diasRestantes = Math.ceil((dataAtual - hoje) / (1000 * 60 * 60 * 24));
+    return json({ message: 'Prazo de emergência liberado! +3 dias adicionados.', vencimento: dataAtual.toISOString(), diasRestantes });
   }
 
   // ─── TABLES ───────────────────────────────────────────────────────────────

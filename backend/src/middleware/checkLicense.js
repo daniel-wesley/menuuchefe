@@ -1,41 +1,57 @@
-import path from 'path';
-import fs from 'fs';
+import { db } from '../config/db.js';
 
-const dbPath = path.resolve(process.env.DATABASE_FILE || '../database/restaurante.sqlite');
-const dbDir = path.dirname(dbPath);
-const licencaPath = path.join(dbDir, 'licenca.json');
+let cachedLicenca = null;
 
-function getLicenca() {
-  if (!fs.existsSync(licencaPath)) {
-    const dataVencimento = new Date();
-    dataVencimento.setDate(dataVencimento.getDate() + 7);
-    const licencaPadrao = {
-      vencimento: dataVencimento.toISOString(),
-      emergenciaUsadaEsteMes: '',
-      chaveAtual: '',
-      modulo: 'BASICO'
-    };
-    fs.writeFileSync(licencaPath, JSON.stringify(licencaPadrao, null, 2), 'utf8');
-    return licencaPadrao;
+async function getLicenca() {
+  try {
+    const row = await db.get('SELECT * FROM licenses WHERE id = 1');
+    if (row) {
+      cachedLicenca = {
+        vencimento: row.vencimento,
+        emergenciaUsadaEsteMes: row.emergencia_usada_este_mes || '',
+        chaveAtual: row.chave_atual || '',
+        diasLicenciados: row.dias_licenciados || 0,
+        modulo: row.modulo || 'BASICO'
+      };
+      return cachedLicenca;
+    }
+  } catch (err) {
+    console.error('Erro ao ler licença do banco:', err.message);
   }
-  const licenca = JSON.parse(fs.readFileSync(licencaPath, 'utf-8'));
-  // Garante campo modulo em licenças antigas
-  if (!licenca.modulo) licenca.modulo = 'BASICO';
-  return licenca;
+
+  const dataVencimento = new Date();
+  dataVencimento.setDate(dataVencimento.getDate() + 7);
+  cachedLicenca = {
+    vencimento: dataVencimento.toISOString(),
+    emergenciaUsadaEsteMes: '',
+    chaveAtual: '',
+    diasLicenciados: 0,
+    modulo: 'BASICO'
+  };
+  return cachedLicenca;
 }
 
-function salvarLicenca(licenca) {
-  fs.writeFileSync(licencaPath, JSON.stringify(licenca, null, 2), 'utf8');
+async function salvarLicenca(licenca) {
+  cachedLicenca = licenca;
+  try {
+    await db.run(
+      `INSERT INTO licenses (id, vencimento, emergencia_usada_este_mes, chave_atual, dias_licenciados, modulo)
+       VALUES (1, $1, $2, $3, $4, $5)
+       ON CONFLICT (id) DO UPDATE SET vencimento=$1, emergencia_usada_este_mes=$2, chave_atual=$3, dias_licenciados=$4, modulo=$5`,
+      [licenca.vencimento, licenca.emergenciaUsadaEsteMes || '', licenca.chaveAtual || '', licenca.diasLicenciados || 0, licenca.modulo || 'BASICO']
+    );
+  } catch (err) {
+    console.error('Erro ao salvar licença no banco:', err.message);
+  }
 }
 
 /**
  * Middleware que verifica se a licença do sistema está válida.
  * Bloqueia rotas de pedidos e caixa quando vencida.
- * NÃO bloqueia: auth, loja (GET), license (ativas), device-ip
  */
-export function checkLicense(req, res, next) {
+export async function checkLicense(req, res, next) {
   try {
-    const licenca = getLicenca();
+    const licenca = await getLicenca();
     const dataVencimento = new Date(licenca.vencimento);
     const hoje = new Date();
 
@@ -57,11 +73,10 @@ export function checkLicense(req, res, next) {
 
 /**
  * Middleware de módulo: bloqueia rotas do Delivery para licenças BASICO.
- * Deve ser usado após checkLicense.
  */
-export function checkModuloGeral(req, res, next) {
+export async function checkModuloGeral(req, res, next) {
   try {
-    const licenca = getLicenca();
+    const licenca = await getLicenca();
     const modulo = (licenca.modulo || 'BASICO').toUpperCase();
 
     if (modulo !== 'GERAL') {
@@ -78,4 +93,4 @@ export function checkModuloGeral(req, res, next) {
   }
 }
 
-export { getLicenca, salvarLicenca, licencaPath };
+export { getLicenca, salvarLicenca };
