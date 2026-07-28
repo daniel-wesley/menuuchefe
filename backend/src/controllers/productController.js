@@ -56,13 +56,12 @@ export async function getProductById(req, res) {
 }
 
 export async function createProduct(req, res) {
-  const { name, price, description, category, stock, track_stock, observations } = req.body;
+  const { name, price, description, category, stock, track_stock, observations, active } = req.body;
 
   if (!name || !price || !category) {
     return res.status(400).json({ message: 'Nome, preço e categoria são obrigatórios.' });
   }
 
-  // Handle uploaded file
   let image_url = null;
   if (req.file) {
     image_url = `/uploads/${req.file.filename}`;
@@ -71,8 +70,8 @@ export async function createProduct(req, res) {
   try {
     const db = await getDbConnection();
     const result = await db.run(
-      `INSERT INTO products (name, price, description, image_url, category, stock, track_stock, observations) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO products (name, price, description, image_url, category, stock, track_stock, observations, active) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
         name,
         parseFloat(price),
@@ -81,7 +80,8 @@ export async function createProduct(req, res) {
         category,
         parseInt(stock) || 0,
         track_stock === 'false' || track_stock === '0' || track_stock === 0 ? 0 : 1,
-        observations || null
+        observations || null,
+        active !== undefined ? (active ? 1 : 0) : 1
       ]
     );
 
@@ -94,7 +94,8 @@ export async function createProduct(req, res) {
       category,
       stock: parseInt(stock) || 0,
       track_stock: track_stock === 'false' || track_stock === '0' || track_stock === 0 ? 0 : 1,
-      observations: observations || null
+      observations: observations || null,
+      active: active !== undefined ? (active ? 1 : 0) : 1
     };
 
     res.status(201).json(newProduct);
@@ -106,7 +107,7 @@ export async function createProduct(req, res) {
 
 export async function updateProduct(req, res) {
   const { id } = req.params;
-  const { name, price, description, category, stock, track_stock, observations } = req.body;
+  const { name, price, description, category, stock, track_stock, observations, image_url: newImageUrl, active } = req.body;
 
   if (!name || !price || !category) {
     return res.status(400).json({ message: 'Nome, preço e categoria são obrigatórios.' });
@@ -122,23 +123,22 @@ export async function updateProduct(req, res) {
 
     let image_url = product.image_url;
     if (req.file) {
-      // Delete old image if it exists and is local
       if (product.image_url && product.image_url.startsWith('/uploads/')) {
         const oldPath = path.join(process.cwd(), product.image_url);
         if (fs.existsSync(oldPath)) {
-          try {
-            fs.unlinkSync(oldPath);
-          } catch (e) {
-            console.error('Failed to delete old image:', e);
-          }
+          try { fs.unlinkSync(oldPath); } catch (e) { console.error('Failed to delete old image:', e); }
         }
       }
       image_url = `/uploads/${req.file.filename}`;
+    } else if (newImageUrl !== undefined) {
+      image_url = newImageUrl;
     }
+
+    const activeValue = active !== undefined ? (active ? 1 : 0) : (product.active !== undefined ? product.active : 1);
 
     await db.run(
       `UPDATE products 
-       SET name = ?, price = ?, description = ?, image_url = ?, category = ?, stock = ?, track_stock = ?, observations = ?
+       SET name = ?, price = ?, description = ?, image_url = ?, category = ?, stock = ?, track_stock = ?, observations = ?, active = ?
        WHERE id = ?`,
       [
         name,
@@ -149,6 +149,7 @@ export async function updateProduct(req, res) {
         parseInt(stock) || 0,
         track_stock === 'false' || track_stock === '0' || track_stock === 0 ? 0 : 1,
         observations || null,
+        activeValue,
         id
       ]
     );
@@ -162,7 +163,8 @@ export async function updateProduct(req, res) {
       category,
       stock: parseInt(stock) || 0,
       track_stock: track_stock === 'false' || track_stock === '0' || track_stock === 0 ? 0 : 1,
-      observations: observations || null
+      observations: observations || null,
+      active: activeValue
     };
 
     res.json(updatedProduct);

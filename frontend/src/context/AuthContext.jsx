@@ -332,7 +332,8 @@ async function handleSupabaseFallback(endpoint, options = {}) {
       category: bodyData.category || 'lanches',
       stock: parseInt(bodyData.stock || 10),
       track_stock: bodyData.track_stock === '1' || bodyData.track_stock === true ? 1 : 0,
-      observations: bodyData.observations || '[]'
+      observations: bodyData.observations || '[]',
+      active: 1
     }]).select().single();
     return json(data || { success: true }, error ? 400 : 200);
   }
@@ -349,6 +350,9 @@ async function handleSupabaseFallback(endpoint, options = {}) {
     };
     if (bodyData.image_url !== undefined) {
       updateFields.image_url = bodyData.image_url;
+    }
+    if (bodyData.active !== undefined) {
+      updateFields.active = bodyData.active;
     }
     await supabase.from('products').update(updateFields).eq('id', id);
     return json({ success: true });

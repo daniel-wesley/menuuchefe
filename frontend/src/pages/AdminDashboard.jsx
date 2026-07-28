@@ -640,6 +640,27 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleToggleProductActive = async (prod) => {
+    const newActive = prod.active === 0 ? 1 : 0;
+    const label = newActive === 0 ? 'inativar' : 'ativar';
+    if (!confirm(`Deseja ${label} o produto "${prod.name}"?`)) return;
+
+    try {
+      const res = await apiFetch(`/api/products/${prod.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...prod, active: newActive })
+      });
+      if (res.ok) {
+        loadProducts();
+      } else {
+        alert('Erro ao atualizar produto.');
+      }
+    } catch (err) {
+      console.error('Erro ao alternar status do produto:', err);
+    }
+  };
+
   const handleMigrateImages = async () => {
     const backendUrl = `http://${window.location.hostname}:3001`;
     const oldImageProducts = products.filter(p => p.image_url && p.image_url.startsWith('/uploads/'));
@@ -2300,12 +2321,13 @@ export default function AdminDashboard() {
                     <th className="px-4 py-3">Categoria</th>
                     <th className="px-4 py-3">Preço</th>
                     <th className="px-4 py-3">Estoque</th>
+                    <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-dark-border text-sm text-zinc-700 dark:text-dark-text">
                   {products.map((p) => (
-                    <tr key={p.id} className="hover:bg-zinc-50 dark:hover:bg-dark-element/50">
+                    <tr key={p.id} className={`hover:bg-zinc-50 dark:hover:bg-dark-element/50 ${p.active === 0 ? 'opacity-50' : ''}`}>
                       <td className="px-4 py-3">
                         {p.image_url ? (
                           <img
@@ -2332,6 +2354,19 @@ export default function AdminDashboard() {
                         ) : (
                           <span className="text-xs text-zinc-400 font-medium">Sem limite</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => handleToggleProductActive(p)}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition ${
+                            p.active === 0
+                              ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-300'
+                              : 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200'
+                          }`}
+                          title={p.active === 0 ? 'Clique para ativar' : 'Clique para inativar'}
+                        >
+                          {p.active === 0 ? 'Inativo' : 'Ativo'}
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-right space-x-2">
                         <button
@@ -2949,12 +2984,25 @@ export default function AdminDashboard() {
                 <label className="block text-xs font-bold text-zinc-500 dark:text-dark-muted mb-1.5 uppercase">Upload de Imagem</label>
                 {editingProduct?.image_url && !productForm.image && (
                   <div className="mb-3">
-                    <img
-                      src={getProductImageUrl(editingProduct.image_url)}
-                      alt={editingProduct.name}
-                      className="h-24 w-24 object-cover rounded-xl border dark:border-dark-border"
-                    />
-                    <p className="text-[10px] text-zinc-400 mt-1">Imagem atual. Selecione uma nova para substituir.</p>
+                    <div className="relative inline-block">
+                      <img
+                        src={getProductImageUrl(editingProduct.image_url)}
+                        alt={editingProduct.name}
+                        className="h-24 w-24 object-cover rounded-xl border dark:border-dark-border"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProduct({ ...editingProduct, image_url: null });
+                          setProductForm({ ...productForm, image: null });
+                        }}
+                        className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full shadow-lg transition"
+                        title="Excluir imagem"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 mt-1">Imagem atual. Clique no X para remover.</p>
                   </div>
                 )}
                 <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-zinc-200 dark:border-dark-border rounded-2xl bg-zinc-50 dark:bg-dark-element/50 hover:bg-zinc-100 transition duration-200 relative">

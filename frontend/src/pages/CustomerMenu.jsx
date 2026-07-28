@@ -81,7 +81,7 @@ export default function CustomerMenu() {
         // Load products
         const productsRes = await apiFetch('/api/products');
         const prods = productsRes.ok ? await productsRes.json() : [];
-        setProducts(prods);
+        setProducts(prods.filter(p => p.active !== 0));
 
         // Load categories
         const categoriesRes = await apiFetch('/api/categories');

@@ -80,7 +80,7 @@ export default function WaiterDashboard() {
         const productsRes = await apiFetch('/api/products');
         if (productsRes.ok) {
           const productsData = await productsRes.json();
-          setProducts(productsData);
+          setProducts(productsData.filter(p => p.active !== 0));
         }
 
         const categoriesRes = await apiFetch('/api/categories');
