@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { getProductImageUrl } from '../lib/supabase.js';
 import { useSocket } from '../context/SocketContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import Navbar from '../components/Navbar.jsx';
@@ -382,7 +383,7 @@ export default function CustomerMenu() {
             >
               {prod.image_url ? (
                 <img
-                  src={`${API_BASE}${prod.image_url}`}
+                  src={getProductImageUrl(prod.image_url)}
                   alt={prod.name}
                   className="h-36 w-full object-cover"
                 />

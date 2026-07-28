@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { uploadProductImage, getProductImageUrl, migrateBackendImage } from '../lib/supabase.js';
 import Navbar from '../components/Navbar.jsx';
 import { 
   BarChart3, Plus, Edit, Trash2, Users, ShieldAlert, Package, 
@@ -546,29 +547,39 @@ export default function AdminDashboard() {
     e.preventDefault();
     setLoading(true);
 
-    const formData = new FormData();
-    formData.append('name', productForm.name);
-    formData.append('price', productForm.price);
-    formData.append('description', productForm.description);
-    formData.append('category', productForm.category);
-    formData.append('stock', productForm.stock);
-    formData.append('track_stock', productForm.track_stock ? '1' : '0');
-    formData.append('observations', JSON.stringify(productForm.observations || []));
-    if (productForm.image) {
-      formData.append('image', productForm.image);
-    }
-
     try {
+      let imageUrl = editingProduct?.image_url || null;
+
+      if (productForm.image) {
+        const uploadedUrl = await uploadProductImage(productForm.image);
+        if (uploadedUrl) {
+          imageUrl = uploadedUrl;
+        }
+      }
+
+      const productData = {
+        name: productForm.name,
+        price: productForm.price,
+        description: productForm.description,
+        category: productForm.category,
+        stock: productForm.stock,
+        track_stock: productForm.track_stock ? '1' : '0',
+        observations: JSON.stringify(productForm.observations || []),
+        image_url: imageUrl,
+      };
+
       let res;
       if (editingProduct) {
         res = await apiFetch(`/api/products/${editingProduct.id}`, {
           method: 'PUT',
-          body: formData
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(productData)
         });
       } else {
         res = await apiFetch('/api/products', {
           method: 'POST',
-          body: formData
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(productData)
         });
       }
 
@@ -586,7 +597,7 @@ export default function AdminDashboard() {
           observations: []
         });
         loadProducts();
-        loadStats(); // reload stock metrics
+        loadStats();
       } else {
         const data = await res.json();
         alert(data.message || 'Erro ao salvar produto.');
@@ -627,6 +638,33 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error('Erro ao excluir produto:', err);
     }
+  };
+
+  const handleMigrateImages = async () => {
+    const backendUrl = `http://${window.location.hostname}:3001`;
+    const oldImageProducts = products.filter(p => p.image_url && p.image_url.startsWith('/uploads/'));
+    if (oldImageProducts.length === 0) {
+      alert('Nenhuma imagem antiga para migrar.');
+      return;
+    }
+    if (!confirm(`Migrar ${oldImageProducts.length} imagem(ns) do backend para Supabase Storage?\n\nAs imagens antigas funcionarão no Netlify depois da migração.`)) return;
+
+    setLoading(true);
+    let migrated = 0;
+    for (const prod of oldImageProducts) {
+      const newUrl = await migrateBackendImage(backendUrl, prod.image_url);
+      if (newUrl) {
+        await apiFetch(`/api/products/${prod.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...prod, image_url: newUrl })
+        });
+        migrated++;
+      }
+    }
+    setLoading(false);
+    loadProducts();
+    alert(`Migração concluída! ${migrated}/${oldImageProducts.length} imagens migradas com sucesso.`);
   };
 
   // CATEGORY CRUD ACTIONS
@@ -2229,17 +2267,28 @@ export default function AdminDashboard() {
           <div className="bg-white dark:bg-dark-card border border-zinc-200 dark:border-dark-border p-6 rounded-2xl shadow-sm animate-in fade-in duration-200">
             <div className="flex justify-between items-center mb-6">
               <h3 className="font-extrabold text-lg text-zinc-900 dark:text-dark-text">Pratos do Cardápio</h3>
-              <button
-                onClick={() => {
-                  setEditingProduct(null);
-                  setProductForm({ name: '', price: '', description: '', category: 'lanches', stock: '10', track_stock: true, image: null, observations: [] });
-                  setShowProductModal(true);
-                }}
-                className="px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 transition duration-200 shadow-md shadow-brand-500/10"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Cadastrar Produto</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                {products.some(p => p.image_url && p.image_url.startsWith('/uploads/')) && (
+                  <button
+                    onClick={handleMigrateImages}
+                    className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 transition duration-200 shadow-md"
+                  >
+                    <Upload className="h-4 w-4" />
+                    <span>Migrar Imagens</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setEditingProduct(null);
+                    setProductForm({ name: '', price: '', description: '', category: 'lanches', stock: '10', track_stock: true, image: null, observations: [] });
+                    setShowProductModal(true);
+                  }}
+                  className="px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 transition duration-200 shadow-md shadow-brand-500/10"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Cadastrar Produto</span>
+                </button>
+              </div>
             </div>
 
             <div className="border border-zinc-200 dark:border-dark-border rounded-xl overflow-hidden">
@@ -2260,7 +2309,7 @@ export default function AdminDashboard() {
                       <td className="px-4 py-3">
                         {p.image_url ? (
                           <img
-                            src={`http://${window.location.hostname}:3001${p.image_url}`}
+                            src={getProductImageUrl(p.image_url)}
                             alt={p.name}
                             className="h-10 w-10 object-cover rounded-lg border dark:border-dark-border"
                           />
@@ -2898,6 +2947,16 @@ export default function AdminDashboard() {
               {/* Product Image File Input */}
               <div>
                 <label className="block text-xs font-bold text-zinc-500 dark:text-dark-muted mb-1.5 uppercase">Upload de Imagem</label>
+                {editingProduct?.image_url && !productForm.image && (
+                  <div className="mb-3">
+                    <img
+                      src={getProductImageUrl(editingProduct.image_url)}
+                      alt={editingProduct.name}
+                      className="h-24 w-24 object-cover rounded-xl border dark:border-dark-border"
+                    />
+                    <p className="text-[10px] text-zinc-400 mt-1">Imagem atual. Selecione uma nova para substituir.</p>
+                  </div>
+                )}
                 <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-zinc-200 dark:border-dark-border rounded-2xl bg-zinc-50 dark:bg-dark-element/50 hover:bg-zinc-100 transition duration-200 relative">
                   <div className="space-y-1 text-center">
                     <Upload className="mx-auto h-8 w-8 text-zinc-400" />

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { getProductImageUrl } from '../lib/supabase.js';
 import { useSocket } from '../context/SocketContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import Navbar from '../components/Navbar.jsx';
@@ -609,7 +610,7 @@ export default function WaiterDashboard() {
                   >
                     {prod.image_url ? (
                       <img
-                        src={`http://${window.location.hostname}:3001${prod.image_url}`}
+                        src={getProductImageUrl(prod.image_url)}
                         alt={prod.name}
                         className="h-36 w-full object-cover"
                       />
@@ -1035,7 +1036,7 @@ export default function WaiterDashboard() {
                     <div className="flex items-center space-x-3 flex-1 min-w-0">
                       {prod.image_url ? (
                         <img
-                          src={`http://${window.location.hostname}:3001${prod.image_url}`}
+                          src={getProductImageUrl(prod.image_url)}
                           alt={prod.name}
                           className="w-10 h-10 rounded-lg object-cover"
                         />

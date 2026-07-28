@@ -289,6 +289,7 @@ async function handleSupabaseFallback(endpoint, options = {}) {
       name: bodyData.name,
       price: parseFloat(bodyData.price || 0),
       description: bodyData.description || '',
+      image_url: bodyData.image_url || null,
       category: bodyData.category || 'lanches',
       stock: parseInt(bodyData.stock || 10),
       track_stock: bodyData.track_stock === '1' || bodyData.track_stock === true ? 1 : 0,
@@ -298,7 +299,7 @@ async function handleSupabaseFallback(endpoint, options = {}) {
   }
   if (endpoint.match(/^\/api\/products\/\d+$/) && method === 'PUT' && bodyData) {
     const id = endpoint.split('/')[3];
-    await supabase.from('products').update({
+    const updateFields = {
       name: bodyData.name,
       price: parseFloat(bodyData.price || 0),
       description: bodyData.description || '',
@@ -306,7 +307,11 @@ async function handleSupabaseFallback(endpoint, options = {}) {
       stock: parseInt(bodyData.stock || 10),
       track_stock: bodyData.track_stock === '1' || bodyData.track_stock === true ? 1 : 0,
       observations: bodyData.observations || '[]'
-    }).eq('id', id);
+    };
+    if (bodyData.image_url !== undefined) {
+      updateFields.image_url = bodyData.image_url;
+    }
+    await supabase.from('products').update(updateFields).eq('id', id);
     return json({ success: true });
   }
   if (endpoint.match(/^\/api\/products\/\d+$/) && method === 'DELETE') {
