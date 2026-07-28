@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom'; // we'll use URL parsing helpers
-import { useAuth, API_BASE } from '../context/AuthContext.jsx';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
-import { supabase } from '../lib/supabase.js';
 import Navbar from '../components/Navbar.jsx';
 import { 
   Coffee, Pizza, Beer, IceCream, Search, Plus, Minus, Trash2, 
@@ -62,24 +61,11 @@ export default function CustomerMenu() {
       }
 
       try {
+        // Load table — apiFetch handles both backend and Supabase fallback
+        const tableRes = await apiFetch(`/api/tables/number/${number}?token=${token}`);
         let tableJson = null;
-        try {
-          const tableRes = await fetch(`${API_BASE}/api/tables/number/${number}?token=${token}`);
-          if (tableRes.ok) {
-            tableJson = await tableRes.json();
-          }
-        } catch (_) {}
-
-        if (!tableJson) {
-          const { data: dbTable } = await supabase
-            .from('tables')
-            .select('*')
-            .eq('number', parseInt(number))
-            .single();
-
-          if (dbTable && (dbTable.token === token || !token || dbTable.token)) {
-            tableJson = dbTable;
-          }
+        if (tableRes.ok) {
+          tableJson = await tableRes.json();
         }
 
         if (!tableJson) {
@@ -92,29 +78,13 @@ export default function CustomerMenu() {
         selectTable(tableJson.id, tableJson.number);
 
         // Load products
-        let prods = [];
-        try {
-          const productsRes = await fetch(`${API_BASE}/api/products`);
-          if (productsRes.ok) prods = await productsRes.json();
-        } catch (_) {}
-
-        if (!prods.length) {
-          const { data: dbProds } = await supabase.from('products').select('*');
-          if (dbProds) prods = dbProds;
-        }
+        const productsRes = await apiFetch('/api/products');
+        const prods = productsRes.ok ? await productsRes.json() : [];
         setProducts(prods);
 
         // Load categories
-        let cats = [];
-        try {
-          const categoriesRes = await fetch(`${API_BASE}/api/categories`);
-          if (categoriesRes.ok) cats = await categoriesRes.json();
-        } catch (_) {}
-
-        if (!cats.length) {
-          const { data: dbCats } = await supabase.from('categories').select('*').order('sort_order');
-          if (dbCats) cats = dbCats;
-        }
+        const categoriesRes = await apiFetch('/api/categories');
+        const cats = categoriesRes.ok ? await categoriesRes.json() : [];
         setCategories(cats);
       } catch (err) {
         console.error(err);
@@ -135,18 +105,16 @@ export default function CustomerMenu() {
       try {
         const updatedOrders = [];
         for (const localOrder of mySubmittedOrders) {
-          // If order was delivered, no need to poll, keep status 'delivered'
           if (localOrder.status === 'delivered') {
             updatedOrders.push(localOrder);
             continue;
           }
-
-          const res = await fetch(`${API_BASE}/api/orders/${localOrder.id}`);
+          const res = await apiFetch(`/api/orders/${localOrder.id}`);
           if (res.ok) {
             const data = await res.json();
             updatedOrders.push(data);
           } else {
-            updatedOrders.push(localOrder); // fallback to cached
+            updatedOrders.push(localOrder);
           }
         }
         setMySubmittedOrders(updatedOrders);
@@ -199,11 +167,8 @@ export default function CustomerMenu() {
         }))
       };
 
-      const res = await fetch(`${API_BASE}/api/orders`, {
+      const res = await apiFetch('/api/orders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(orderBody)
       });
 
