@@ -26,13 +26,33 @@ export function SocketProvider({ children }) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
-        (payload) => {
+        async (payload) => {
           const callbacks = eventListeners.get('order_status_changed') || [];
           callbacks.forEach(cb => cb(payload.new));
 
-          if (payload.eventType === 'INSERT') {
-            const newOrderCallbacks = eventListeners.get('new_order') || [];
-            newOrderCallbacks.forEach(cb => cb(payload.new));
+          if (payload.eventType === 'INSERT' && payload.new) {
+            const orderRow = payload.new;
+            try {
+              const { data: items } = await supabase
+                .from('order_items')
+                .select('*, product:products(name, price)')
+                .eq('order_id', orderRow.id);
+              const { data: tableData } = await supabase
+                .from('tables')
+                .select('number')
+                .eq('id', orderRow.table_id)
+                .single();
+              const enrichedOrder = {
+                ...orderRow,
+                table_number: tableData?.number || '?',
+                items: (items || []).map(i => ({ ...i, name: i.product?.name || 'Item' }))
+              };
+              const newOrderCallbacks = eventListeners.get('order_received') || [];
+              newOrderCallbacks.forEach(cb => cb(enrichedOrder));
+            } catch (err) {
+              const newOrderCallbacks = eventListeners.get('order_received') || [];
+              newOrderCallbacks.forEach(cb => cb({ ...orderRow, table_number: '?', items: [] }));
+            }
           }
         }
       )
@@ -42,6 +62,38 @@ export function SocketProvider({ children }) {
         (payload) => {
           const callbacks = eventListeners.get('table_status_changed') || [];
           callbacks.forEach(cb => cb(payload.new));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'delivery_orders' },
+        async (payload) => {
+          if (payload.eventType === 'INSERT' && payload.new) {
+            const deliveryRow = payload.new;
+            try {
+              const { data: items } = await supabase
+                .from('delivery_order_items')
+                .select('*')
+                .eq('delivery_order_id', deliveryRow.id);
+              const enriched = {
+                ...deliveryRow,
+                is_delivery: true,
+                table_number: 'Delivery',
+                items: (items || []).map(it => ({ ...it, name: it.product_name || it.name || 'Item' }))
+              };
+              const cbs = eventListeners.get('delivery_order_created') || [];
+              cbs.forEach(cb => cb(enriched));
+            } catch (err) {
+              const cbs = eventListeners.get('delivery_order_created') || [];
+              cbs.forEach(cb => cb({ ...deliveryRow, is_delivery: true, table_number: 'Delivery', items: [] }));
+            }
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            const cbs = eventListeners.get('delivery_order_updated') || [];
+            cbs.forEach(cb => cb({ ...payload.new, is_delivery: true, table_number: 'Delivery' }));
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            const cbs = eventListeners.get('delivery_order_deleted') || [];
+            cbs.forEach(cb => cb({ id: payload.old.id }));
+          }
         }
       )
       .subscribe();
