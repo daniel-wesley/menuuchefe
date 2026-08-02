@@ -318,6 +318,17 @@ async function handleSupabaseFallback(endpoint, options = {}) {
     return json({ success: true });
   }
 
+  // DELETE /api/tables/:id
+  if (endpoint.match(/^\/api\/tables\/\d+$/) && method === 'DELETE') {
+    const tableId = endpoint.split('/')[3];
+    const { data: table } = await supabase.from('tables').select('status').eq('id', tableId).single();
+    if (table && table.status !== 'free') {
+      return json({ message: 'Não é possível excluir uma mesa que está ocupada ou aguardando pagamento.' }, 400);
+    }
+    await supabase.from('tables').delete().eq('id', tableId);
+    return json({ success: true });
+  }
+
   // ─── PRODUCTS ─────────────────────────────────────────────────────────────
   if (endpoint.startsWith('/api/products') && method === 'GET') {
     const { data } = await supabase.from('products').select('*');

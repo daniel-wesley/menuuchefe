@@ -104,6 +104,35 @@ export async function updateTableStatus(req, res) {
   }
 }
 
+export async function deleteTable(req, res) {
+  const { id } = req.params;
+
+  try {
+    const db = await getDbConnection();
+    const table = await db.get('SELECT * FROM tables WHERE id = ?', [id]);
+
+    if (!table) {
+      return res.status(404).json({ message: 'Mesa não encontrada.' });
+    }
+
+    if (table.status !== 'free') {
+      return res.status(400).json({ message: 'Não é possível excluir uma mesa que está ocupada ou aguardando pagamento.' });
+    }
+
+    await db.run('DELETE FROM tables WHERE id = ?', [id]);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('table_deleted', { id, number: table.number });
+    }
+
+    res.json({ message: `Mesa ${table.number} excluída com sucesso.` });
+  } catch (error) {
+    console.error('Error deleting table:', error);
+    res.status(500).json({ message: 'Erro ao excluir mesa.' });
+  }
+}
+
 export async function resetTable(req, res) {
   const { id } = req.params;
 

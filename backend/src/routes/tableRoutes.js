@@ -4,7 +4,8 @@ import {
   getTableByNumber, 
   createTable, 
   updateTableStatus, 
-  resetTable 
+  resetTable,
+  deleteTable 
 } from '../controllers/tableController.js';
 import { authenticateToken, authorize } from '../middleware/auth.js';
 
@@ -24,5 +25,8 @@ router.put('/:id/status', authenticateToken, authorize(['admin', 'waiter', 'cash
 
 // Protected: Staff can release/reset table
 router.put('/:id/reset', authenticateToken, authorize(['admin', 'waiter', 'cashier']), resetTable);
+
+// Protected: Only admin can delete tables
+router.delete('/:id', authenticateToken, authorize('admin'), deleteTable);
 
 export default router;

@@ -146,6 +146,22 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleDeleteTable = async (tableId, tableNumber) => {
+    if (!window.confirm(`Tem certeza que deseja excluir a Mesa ${tableNumber}?`)) return;
+    try {
+      const res = await apiFetch(`/api/tables/${tableId}`, { method: 'DELETE' });
+      if (res.ok) {
+        loadTables();
+      } else {
+        const data = await res.json();
+        alert(data.message || 'Erro ao excluir mesa.');
+      }
+    } catch (err) {
+      console.error('Erro ao excluir mesa:', err);
+      alert('Erro de conexão ao excluir mesa.');
+    }
+  };
+
   const [lojaForm, setLojaForm] = useState({
     nome_fantasia: '',
     telefone: '',
@@ -2598,7 +2614,7 @@ export default function AdminDashboard() {
                 {tables.map((table) => (
                   <div
                     key={table.id}
-                    className={`border p-5 rounded-2xl text-center flex flex-col items-center justify-center space-y-3 transition ${
+                    className={`relative border p-5 rounded-2xl text-center flex flex-col items-center justify-center space-y-3 transition ${
                       table.status === 'occupied'
                         ? 'bg-amber-50 dark:bg-amber-950/10 border-amber-200 dark:border-amber-900/40'
                         : table.status === 'waiting_payment'
@@ -2606,6 +2622,14 @@ export default function AdminDashboard() {
                         : 'bg-zinc-50 dark:bg-dark-element/40 border-zinc-200 dark:border-dark-border'
                     }`}
                   >
+                    {table.status === 'free' && (
+                      <button
+                        onClick={() => handleDeleteTable(table.id, table.number)}
+                        className="absolute top-2 right-2 p-1 rounded-full bg-zinc-200 dark:bg-zinc-700 hover:bg-red-500 hover:text-white text-zinc-500 transition"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center font-extrabold text-xl shadow-md ${
                       table.status === 'occupied'
                         ? 'bg-amber-500 text-white'
