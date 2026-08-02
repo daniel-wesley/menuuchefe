@@ -13,6 +13,7 @@ import CashierDashboard from './pages/CashierDashboard.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import DeliveryDashboard from './pages/DeliveryDashboard.jsx';
 import CustomerMenu from './pages/CustomerMenu.jsx';
+import CustomerCatalog from './pages/CustomerCatalog.jsx';
 
 // Role-based landing router
 function HomeRedirect() {
@@ -104,6 +105,9 @@ export default function App() {
 
               {/* Public Client QR Self-Service menu Route */}
               <Route path="/mesa/:number" element={<CustomerMenu />} />
+
+              {/* Public Catalog Route (read-only, no ordering) */}
+              <Route path="/cardapio" element={<CustomerCatalog />} />
 
               {/* Fallback route */}
               <Route path="*" element={<Navigate to="/" replace />} />

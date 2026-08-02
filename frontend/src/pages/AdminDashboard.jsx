@@ -6,7 +6,7 @@ import {
   BarChart3, Plus, Edit, Trash2, Users, ShieldAlert, Package, 
   Settings, Grid, FileSpreadsheet, DollarSign, ShoppingBag, 
   TrendingUp, RefreshCw, Upload, Image, Check, X, AlertTriangle,
-  Eye, Key, Shield, Clock, ChevronDown, MessageSquare, Tags
+  Eye, Key, Shield, Clock, ChevronDown, MessageSquare, Tags, QrCode
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -83,6 +83,9 @@ export default function AdminDashboard() {
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(false);
   const [productCategoryFilter, setProductCategoryFilter] = useState('');
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [showCatalogQrModal, setShowCatalogQrModal] = useState(false);
+  const [catalogQrQty, setCatalogQrQty] = useState(4);
 
   // Category CRUD states
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -2289,6 +2292,16 @@ export default function AdminDashboard() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <h3 className="font-extrabold text-lg text-zinc-900 dark:text-dark-text">Pratos do Cardápio</h3>
               <div className="flex items-center space-x-2 w-full sm:w-auto">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={productSearchQuery}
+                    onChange={(e) => setProductSearchQuery(e.target.value)}
+                    placeholder="Pesquisar produto..."
+                    className="pl-8 pr-3 py-2 border border-zinc-200 dark:border-dark-border rounded-xl bg-zinc-50 dark:bg-dark-element text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-full sm:w-48"
+                  />
+                  <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </div>
                 <select
                   value={productCategoryFilter}
                   onChange={(e) => setProductCategoryFilter(e.target.value)}
@@ -2309,6 +2322,13 @@ export default function AdminDashboard() {
                   </button>
                 )}
                 <button
+                  onClick={() => setShowCatalogQrModal(true)}
+                  className="px-4 py-2.5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold rounded-xl text-xs flex items-center space-x-1.5 transition duration-200 shadow-md border border-stone-700"
+                >
+                  <QrCode className="h-4 w-4 text-brand-500" />
+                  <span>QR Cardápio</span>
+                </button>
+                <button
                   onClick={() => {
                     setEditingProduct(null);
                     setProductForm({ name: '', price: '', description: '', category: 'lanches', stock: '10', track_stock: true, active: true, image: null, observations: [] });
@@ -2326,6 +2346,7 @@ export default function AdminDashboard() {
               <table className="min-w-full divide-y divide-zinc-200 dark:divide-dark-border text-left">
                 <thead className="bg-zinc-50 dark:bg-dark-element text-zinc-500 text-[10px] font-bold uppercase tracking-wider">
                   <tr>
+                    <th className="px-4 py-3">Código</th>
                     <th className="px-4 py-3">Imagem</th>
                     <th className="px-4 py-3">Nome</th>
                     <th className="px-4 py-3">Categoria</th>
@@ -2338,8 +2359,10 @@ export default function AdminDashboard() {
                 <tbody className="divide-y divide-zinc-200 dark:divide-dark-border text-sm text-zinc-700 dark:text-dark-text">
                   {products
                     .filter(p => !productCategoryFilter || p.category === productCategoryFilter)
+                    .filter(p => !productSearchQuery || p.name.toLowerCase().includes(productSearchQuery.toLowerCase()))
                     .map((p) => (
                     <tr key={p.id} className={`hover:bg-zinc-50 dark:hover:bg-dark-element/50 ${p.active === 0 ? 'opacity-50' : ''}`}>
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-500 dark:text-zinc-400">#{p.id}</td>
                       <td className="px-4 py-3">
                         {p.image_url ? (
                           <img
@@ -3380,6 +3403,147 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: QR Code do Cardápio Digital */}
+      {showCatalogQrModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-dark-card border border-zinc-200 dark:border-dark-border max-w-md w-full rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-gradient-to-r from-brand-500 to-brand-600 p-6 flex items-center justify-between text-white">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-white/20 rounded-xl font-bold">
+                  <QrCode className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg">Cardápio Digital</h3>
+                  <p className="text-brand-100 text-xs font-semibold">QR Code para clientes visualizarem o cardápio</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCatalogQrModal(false)}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 flex flex-col items-center">
+              <div className="text-center">
+                <p className="text-sm text-zinc-600 dark:text-dark-muted font-medium mb-1">
+                  Escaneie o QR Code abaixo com a câmera do celular para ver o cardápio completo.
+                </p>
+                <p className="text-xs text-emerald-500 font-bold">
+                  ✓ Apenas visualização — clientes não fazem pedidos por aqui.
+                </p>
+              </div>
+
+              {/* QR Code Container */}
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-inner flex flex-col items-center">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                    `${window.location.protocol}//${window.location.host}/cardapio`
+                  )}`}
+                  alt="QR Code do Cardápio"
+                  className="w-48 h-48"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = 'https://placehold.co/220?text=Erro+QR+Code';
+                  }}
+                />
+              </div>
+
+              {/* Endereço Manual */}
+              <div className="w-full bg-zinc-50 dark:bg-dark-element border border-zinc-200 dark:border-dark-border rounded-2xl p-4 text-center">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                  Endereço do Cardápio
+                </span>
+                <code className="text-sm font-extrabold text-zinc-800 dark:text-dark-text select-all">
+                  {window.location.protocol}//{window.location.host}/cardapio
+                </code>
+              </div>
+
+              {/* Quantidade e Imprimir */}
+              <div className="w-full flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Qtd por folha</label>
+                  <select
+                    value={catalogQrQty}
+                    onChange={(e) => setCatalogQrQty(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 border border-zinc-200 dark:border-dark-border rounded-xl bg-zinc-50 dark:bg-dark-element text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                  >
+                    <option value={1}>1 QR Code (grande)</option>
+                    <option value={2}>2 QR Codes</option>
+                    <option value={4}>4 QR Codes</option>
+                    <option value={6}>6 QR Codes</option>
+                    <option value={8}>8 QR Codes</option>
+                    <option value={9}>9 QR Codes (máximo)</option>
+                  </select>
+                </div>
+                <button
+                  onClick={() => {
+                    const qrUrl = `${window.location.protocol}//${window.location.host}/cardapio`;
+                    const printWindow = window.open('', '_blank', 'width=800,height=600');
+                    const qrSize = catalogQrQty <= 2 ? 200 : catalogQrQty <= 4 ? 160 : catalogQrQty <= 6 ? 130 : 110;
+                    const qrCells = Array(catalogQrQty).fill('').map(() =>
+                      `<div style="text-align:center;break-ins:avoid;">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(qrUrl)}" width="${qrSize}" height="${qrSize}" style="display:block;margin:0 auto;" />
+                        <p style="font-family:Arial,sans-serif;font-size:11px;font-weight:bold;color:#f97316;margin-top:6px;">Escaneie para ver o cardápio</p>
+                      </div>`
+                    ).join('');
+                    printWindow.document.write(`
+                      <!DOCTYPE html>
+                      <html>
+                      <head>
+                        <title>QR Code Cardápio</title>
+                        <style>
+                          @page { size: A4; margin: 15mm; }
+                          * { margin:0; padding:0; box-sizing:border-box; }
+                          body { font-family:Arial,sans-serif; }
+                          .grid { display:grid; gap:18px; width:100%; }
+                          .grid-1 { grid-template-columns:1fr; max-width:250px; margin:0 auto; }
+                          .grid-2 { grid-template-columns:1fr 1fr; max-width:450px; margin:0 auto; }
+                          .grid-4 { grid-template-columns:1fr 1fr; max-width:500px; margin:0 auto; }
+                          .grid-6 { grid-template-columns:1fr 1fr 1fr; max-width:600px; margin:0 auto; }
+                          .grid-8 { grid-template-columns:1fr 1fr 1fr 1fr; max-width:700px; margin:0 auto; }
+                          .grid-9 { grid-template-columns:1fr 1fr 1fr; max-width:600px; margin:0 auto; }
+                          .header { text-align:center; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f97316; }
+                          .header h1 { font-size:22px; color:#1c1917; margin-bottom:4px; }
+                          .header p { font-size:12px; color:#78716c; }
+                          .footer { text-align:center; margin-top:20px; padding-top:12px; border-top:1px solid #e7e5e4; }
+                          .footer p { font-size:10px; color:#a8a29e; }
+                          .cell { padding:12px; border:1px solid #e7e5e4; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+                          @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="header">
+                          <h1>🔥 Cardápio Digital</h1>
+                          <p>Escaneie o QR Code para ver nossos produtos e preços</p>
+                        </div>
+                        <div class="grid grid-${catalogQrQty}">${qrCells}</div>
+                        <div class="footer"><p>Cardápio Digital • Acesse pelo celular</p></div>
+                      </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    setTimeout(() => printWindow.print(), 800);
+                  }}
+                  className="mt-5 px-5 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-md shadow-brand-500/10"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                  Imprimir
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowCatalogQrModal(false)}
+                className="w-full py-3.5 bg-zinc-150 hover:bg-zinc-200 dark:bg-dark-element dark:hover:bg-zinc-800 text-zinc-700 dark:text-dark-text font-bold rounded-xl text-sm transition"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
