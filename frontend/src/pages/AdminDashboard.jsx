@@ -82,6 +82,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [productCategoryFilter, setProductCategoryFilter] = useState('');
 
   // Category CRUD states
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -2285,9 +2286,19 @@ export default function AdminDashboard() {
         {/* Tab Content 2: Products Catalogue (CRUD) */}
         {activeSubTab === 'products' && (
           <div className="bg-white dark:bg-dark-card border border-zinc-200 dark:border-dark-border p-6 rounded-2xl shadow-sm animate-in fade-in duration-200">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <h3 className="font-extrabold text-lg text-zinc-900 dark:text-dark-text">Pratos do Cardápio</h3>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                <select
+                  value={productCategoryFilter}
+                  onChange={(e) => setProductCategoryFilter(e.target.value)}
+                  className="px-3 py-2 border border-zinc-200 dark:border-dark-border rounded-xl bg-zinc-50 dark:bg-dark-element text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                >
+                  <option value="">Todas as Categorias</option>
+                  {(categories || []).filter(c => c.active !== 0).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map((cat) => (
+                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                  ))}
+                </select>
                 {products.some(p => p.image_url && p.image_url.startsWith('/uploads/')) && (
                   <button
                     onClick={handleMigrateImages}
@@ -2325,7 +2336,9 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-dark-border text-sm text-zinc-700 dark:text-dark-text">
-                  {products.map((p) => (
+                  {products
+                    .filter(p => !productCategoryFilter || p.category === productCategoryFilter)
+                    .map((p) => (
                     <tr key={p.id} className={`hover:bg-zinc-50 dark:hover:bg-dark-element/50 ${p.active === 0 ? 'opacity-50' : ''}`}>
                       <td className="px-4 py-3">
                         {p.image_url ? (
