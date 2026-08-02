@@ -739,10 +739,215 @@ async function handleSupabaseFallback(endpoint, options = {}) {
     return json({ success: true });
   }
   if (endpoint.startsWith('/api/reports/detailed') && method === 'GET') {
-    return json({ billing_by_method: [], ticket_medio: 0, sales_count: 0, total_revenue: 0, cancellations: [], abc_products: [], sales_by_category: [], rush_hours: [], waiter_performance: [], avg_prep_time: 0, modality_data: [], rush_by_day: [], ticket_by_table: [], tma_by_category: [], complimentary: [], total_complimentary: 0, cancellations_by_reason: [], top5_products: [] });
+    const url = new URL(endpoint, window.location.origin);
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
+    const turn = url.searchParams.get('turn');
+
+    // Helper: filter by date range on a created_at field
+    const inRange = (val, start, end) => {
+      if (!val) return false;
+      const d = val.split('T')[0];
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
+    };
+    const inTurn = (val) => {
+      if (!turn || !val) return true;
+      const hour = parseInt((val.split('T')[1] || '00:00').split(':')[0], 10);
+      if (turn === 'lunch') return hour >= 11 && hour < 16;
+      if (turn === 'dinner') return hour >= 16 || hour < 4;
+      return true;
+    };
+
+    // 1. Transactions (financial)
+    const { data: allTxs } = await supabase.from('transactions').select('*');
+    const txs = (allTxs || []).filter(t => inRange(t.created_at, startDate, endDate) && inTurn(t.created_at));
+
+    // Billing by method
+    const payMap = {};
+    txs.forEach(t => {
+      const m = t.payment_method || 'outros';
+      if (!payMap[m]) payMap[m] = { payment_method: m, total: 0, count: 0 };
+      payMap[m].total += parseFloat(t.total_amount) || 0;
+      payMap[m].count++;
+    });
+    const billing_by_method = Object.values(payMap);
+
+    // Totals
+    const total_revenue = txs.reduce((s, t) => s + (parseFloat(t.total_amount) || 0), 0);
+    const uniqueGroups = new Set(txs.map(t => t.group_id).filter(Boolean));
+    const sales_count = uniqueGroups.size || txs.length;
+    const ticket_medio = sales_count > 0 ? total_revenue / sales_count : 0;
+
+    // 2. Orders + Order Items (products, waiter, etc)
+    const { data: allOrders } = await supabase.from('orders').select('*');
+    const paidOrders = (allOrders || []).filter(o => o.paid === 1 && inRange(o.created_at, startDate, endDate) && inTurn(o.created_at));
+
+    // Curva ABC / Top products
+    const paidOrderIds = paidOrders.map(o => o.id);
+    let abc_products = [];
+    let top5_products = [];
+    if (paidOrderIds.length > 0) {
+      const { data: items } = await supabase.from('order_items').select('product_id, quantity, price, order_id').in('order_id', paidOrderIds);
+      const { data: prods } = await supabase.from('products').select('id, name, category');
+      const prodMap = {};
+      (prods || []).forEach(p => { prodMap[p.id] = p; });
+      const salesMap = {};
+      (items || []).forEach(oi => {
+        const pid = oi.product_id;
+        if (!salesMap[pid]) salesMap[pid] = { name: prodMap[pid]?.name || '', category: prodMap[pid]?.category || '', quantity_sold: 0, total_revenue: 0 };
+        salesMap[pid].quantity_sold += oi.quantity || 0;
+        salesMap[pid].total_revenue += (oi.quantity || 0) * (oi.price || 0);
+      });
+      const sorted = Object.values(salesMap).sort((a, b) => b.total_revenue - a.total_revenue);
+      const totalProdRev = sorted.reduce((s, p) => s + p.total_revenue, 0);
+      let cum = 0;
+      abc_products = sorted.map(p => {
+        cum += p.total_revenue;
+        const pct = totalProdRev > 0 ? cum / totalProdRev : 0;
+        let c = 'C';
+        if (pct <= 0.70) c = 'A';
+        else if (pct <= 0.90) c = 'B';
+        return { ...p, classification: c };
+      });
+      top5_products = sorted.slice(0, 5);
+    }
+
+    // Sales by category
+    const catMap = {};
+    if (paidOrderIds.length > 0) {
+      const { data: items2 } = await supabase.from('order_items').select('product_id, quantity, price').in('order_id', paidOrderIds);
+      const { data: prods2 } = await supabase.from('products').select('id, category');
+      const pMap2 = {};
+      (prods2 || []).forEach(p => { pMap2[p.id] = p; });
+      (items2 || []).forEach(oi => {
+        const cat = pMap2[oi.product_id]?.category || 'outros';
+        if (!catMap[cat]) catMap[cat] = { category: cat, total: 0, quantity: 0 };
+        catMap[cat].total += (oi.quantity || 0) * (oi.price || 0);
+        catMap[cat].quantity += oi.quantity || 0;
+      });
+    }
+    const sales_by_category = Object.values(catMap);
+
+    // Waiter performance
+    const { data: users } = await supabase.from('users').select('id, name');
+    const userMap = {};
+    (users || []).forEach(u => { userMap[u.id] = u; });
+    const waiterMap = {};
+    paidOrders.forEach(o => {
+      const key = o.user_id || 'anon';
+      const name = o.user_id ? (userMap[o.user_id]?.name || 'Garçom') : 'QR Code / Auto-atendimento';
+      if (!waiterMap[key]) waiterMap[key] = { waiter_name: name, total_sales: 0, orders_count: 0, ticket_medio: 0 };
+      waiterMap[key].total_sales += o.total_amount || 0;
+      waiterMap[key].orders_count++;
+    });
+    Object.values(waiterMap).forEach(w => {
+      w.ticket_medio = w.orders_count > 0 ? w.total_sales / w.orders_count : 0;
+    });
+    const waiter_performance = Object.values(waiterMap).sort((a, b) => b.total_sales - a.total_sales);
+
+    // Rush hours
+    const rushMap = {};
+    txs.forEach(t => {
+      const hour = (t.created_at || '').split('T')[1]?.split(':')[0] || '00';
+      if (!rushMap[hour]) rushMap[hour] = { hour, count: 0, total: 0 };
+      rushMap[hour].count++;
+      rushMap[hour].total += parseFloat(t.total_amount) || 0;
+    });
+    const rush_hours = Object.values(rushMap).sort((a, b) => a.hour.localeCompare(b.hour));
+
+    // Cancellations
+    let cancellations = [];
+    try {
+      const { data: c } = await supabase.from('cancellations').select('*');
+      cancellations = (c || []).filter(x => inRange(x.created_at, startDate, endDate));
+    } catch {}
+
+    // Modality
+    const salonTotal = txs.filter(t => t.table_id && t.table_id !== 0).reduce((s, t) => s + (parseFloat(t.total_amount) || 0), 0);
+    const { data: delOrders } = await supabase.from('delivery_orders').select('total_amount, status, created_at');
+    const delivered = (delOrders || []).filter(d => d.status === 'delivered' && inRange(d.created_at, startDate, endDate));
+    const deliveryTotal = delivered.reduce((s, d) => s + (parseFloat(d.total_amount) || 0), 0);
+    const modality_data = [
+      { modality: 'Salão (Mesas)', total: salonTotal },
+      { modality: 'Delivery', total: deliveryTotal, count: delivered.length }
+    ];
+
+    // Rush by day
+    const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const rushDayMap = {};
+    txs.forEach(t => {
+      const dt = new Date(t.created_at);
+      const dayNum = dt.getDay();
+      const hour = (t.created_at || '').split('T')[1]?.split(':')[0] || '00';
+      const key = `${dayNum}-${hour}`;
+      if (!rushDayMap[key]) rushDayMap[key] = { day_name: dayNames[dayNum], day_num: dayNum, hour, count: 0, total: 0 };
+      rushDayMap[key].count++;
+      rushDayMap[key].total += parseFloat(t.total_amount) || 0;
+    });
+    const rush_by_day = Object.values(rushDayMap).sort((a, b) => a.day_num - b.day_num || a.hour.localeCompare(b.hour));
+
+    // Avg prep time
+    const deliveredOrders = paidOrders.filter(o => o.status === 'delivered');
+    let avg_prep_time = 0;
+    if (deliveredOrders.length > 0) {
+      const totalMin = deliveredOrders.reduce((s, o) => {
+        const created = new Date(o.created_at).getTime();
+        const updated = new Date(o.updated_at).getTime();
+        return s + (updated - created) / 60000;
+      }, 0);
+      avg_prep_time = totalMin / deliveredOrders.length;
+    }
+
+    return json({
+      billing_by_method, ticket_medio, sales_count, total_revenue, cancellations,
+      abc_products, sales_by_category, rush_hours, waiter_performance, avg_prep_time,
+      modality_data, rush_by_day, ticket_by_table: [], tma_by_category: [],
+      complimentary: [], total_complimentary: 0, cancellations_by_reason: [], top5_products
+    });
   }
   if (endpoint.startsWith('/api/reports/waiter-sales') && method === 'GET') {
-    return json({ subtotal: 0, gorjeta: 0, totalGeral: 0, ordersCount: 0, ticketMedio: 0, topProducts: [], waiter: null });
+    const url = new URL(endpoint, window.location.origin);
+    const waiterId = url.searchParams.get('waiterId');
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
+
+    if (!waiterId) return json({ subtotal: 0, gorjeta: 0, totalGeral: 0, ordersCount: 0, ticketMedio: 0, topProducts: [], waiter: null });
+
+    const { data: waiter } = await supabase.from('users').select('id, name, username').eq('id', waiterId).maybeSingle();
+    const { data: allOrders } = await supabase.from('orders').select('id, total_amount, created_at, paid').eq('user_id', waiterId).eq('paid', 1);
+
+    const paidOrders = (allOrders || []).filter(o => {
+      const d = (o.created_at || '').split('T')[0];
+      if (startDate && d < startDate) return false;
+      if (endDate && d > endDate) return false;
+      return true;
+    });
+
+    const subtotal = paidOrders.reduce((s, o) => s + (o.total_amount || 0), 0);
+    const ordersCount = paidOrders.length;
+    const ticketMedio = ordersCount > 0 ? subtotal / ordersCount : 0;
+    const gorjeta = subtotal * 0.10;
+    const totalGeral = subtotal + gorjeta;
+
+    let topProducts = [];
+    if (paidOrders.length > 0) {
+      const { data: items } = await supabase.from('order_items').select('product_id, quantity, price').in('order_id', paidOrders.map(o => o.id));
+      const { data: prods } = await supabase.from('products').select('id, name, category');
+      const pMap = {};
+      (prods || []).forEach(p => { pMap[p.id] = p; });
+      const sMap = {};
+      (items || []).forEach(oi => {
+        const pid = oi.product_id;
+        if (!sMap[pid]) sMap[pid] = { name: pMap[pid]?.name || '', category: pMap[pid]?.category || '', quantity_sold: 0, total_revenue: 0 };
+        sMap[pid].quantity_sold += oi.quantity || 0;
+        sMap[pid].total_revenue += (oi.quantity || 0) * (oi.price || 0);
+      });
+      topProducts = Object.values(sMap).sort((a, b) => b.quantity_sold - a.quantity_sold).slice(0, 5);
+    }
+
+    return json({ waiter, subtotal, ordersCount, ticketMedio, gorjeta, totalGeral, topProducts });
   }
 
   // ─── DAV ──────────────────────────────────────────────────────────────────
