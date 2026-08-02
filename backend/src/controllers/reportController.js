@@ -186,16 +186,18 @@ export async function getAdminDashboardStats(req, res) {
   try {
     const db = await getDbConnection();
 
-    // 1. Total revenue
+    // 1. Total revenue (from transactions — source of truth for payments)
     const revenueResult = await db.get('SELECT SUM(total_amount) as total FROM transactions');
     const totalRevenue = revenueResult.total || 0;
 
-    // 2. Best selling products
+    // 2. Best selling products (only paid orders — consistent with reports)
     const bestSellers = await db.all(
       `SELECT p.name, p.category, SUM(oi.quantity) as quantity_sold, SUM(oi.quantity * oi.price) as total_revenue
        FROM order_items oi
        JOIN products p ON oi.product_id = p.id
-       GROUP BY oi.product_id
+       JOIN orders o ON oi.order_id = o.id
+       WHERE o.paid = 1
+       GROUP BY oi.product_id, p.name, p.category
        ORDER BY quantity_sold DESC
        LIMIT 5`
     );
@@ -205,12 +207,12 @@ export async function getAdminDashboardStats(req, res) {
       'SELECT id, name, stock, category FROM products WHERE track_stock = 1 AND stock <= 5 ORDER BY stock ASC'
     );
 
-    // 4. Sales by payment method (all time)
+    // 4. Sales by payment method (from transactions — source of truth)
     const paymentMethods = await db.all(
       'SELECT payment_method, SUM(total_amount) as total, COUNT(*) as count FROM transactions GROUP BY payment_method'
     );
 
-    // 5. Daily sales chart (last 7 days)
+    // 5. Daily sales chart (last 7 days — from transactions for consistency with total_revenue)
     const dailySales = await db.all(
       `SELECT DATE(created_at) as date, SUM(total_amount) as total 
        FROM transactions 
@@ -219,7 +221,7 @@ export async function getAdminDashboardStats(req, res) {
        ORDER BY date ASC`
     );
 
-    // 6. Sales by waiter (all time)
+    // 6. Sales by waiter (all time — only paid orders)
     const waiterSales = await db.all(
       `SELECT 
          COALESCE(u.name, 'QR Code / Auto-atendimento') as waiter_name, 

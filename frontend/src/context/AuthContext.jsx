@@ -652,10 +652,72 @@ async function handleSupabaseFallback(endpoint, options = {}) {
 
   // ─── REPORTS ──────────────────────────────────────────────────────────────
   if (endpoint.startsWith('/api/reports/stats') && method === 'GET') {
-    const { data: prods } = await supabase.from('products').select('*');
     const { data: txs } = await supabase.from('transactions').select('*');
     const totalRev = (txs || []).reduce((s, t) => s + (parseFloat(t.total_amount) || 0), 0);
-    return json({ total_revenue: totalRev, best_sellers: (prods || []).slice(0, 5), low_stock: (prods || []).filter(p => p.stock <= 5), payment_methods: [{ payment_method: 'pix', total: totalRev * 0.6, count: 12 }, { payment_method: 'credito', total: totalRev * 0.4, count: 8 }], daily_sales: [], waiter_sales: [] });
+
+    // Payment methods grouped from real transactions
+    const payMap = {};
+    (txs || []).forEach(t => {
+      const m = t.payment_method || 'outros';
+      if (!payMap[m]) payMap[m] = { payment_method: m, total: 0, count: 0 };
+      payMap[m].total += parseFloat(t.total_amount) || 0;
+      payMap[m].count++;
+    });
+    const paymentMethods = Object.values(payMap);
+
+    // Daily sales (last 7 days)
+    const now = new Date();
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    const dailyMap = {};
+    (txs || []).forEach(t => {
+      const d = (t.created_at || '').split('T')[0];
+      if (d && new Date(d) >= sevenDaysAgo) {
+        if (!dailyMap[d]) dailyMap[d] = { date: d, total: 0 };
+        dailyMap[d].total += parseFloat(t.total_amount) || 0;
+      }
+    });
+    const dailySales = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Best sellers from order_items (only paid orders)
+    const { data: paidOrders } = await supabase.from('orders').select('id').eq('paid', 1);
+    const paidOrderIds = (paidOrders || []).map(o => o.id);
+    let bestSellers = [];
+    if (paidOrderIds.length > 0) {
+      const { data: items } = await supabase.from('order_items').select('product_id, quantity, price').in('order_id', paidOrderIds);
+      const { data: prods } = await supabase.from('products').select('id, name, category');
+      const prodMap = {};
+      (prods || []).forEach(p => { prodMap[p.id] = p; });
+      const salesMap = {};
+      (items || []).forEach(oi => {
+        const pid = oi.product_id;
+        if (!salesMap[pid]) salesMap[pid] = { name: prodMap[pid]?.name || '', category: prodMap[pid]?.category || '', quantity_sold: 0, total_revenue: 0 };
+        salesMap[pid].quantity_sold += oi.quantity || 0;
+        salesMap[pid].total_revenue += (oi.quantity || 0) * (oi.price || 0);
+      });
+      bestSellers = Object.values(salesMap).sort((a, b) => b.quantity_sold - a.quantity_sold).slice(0, 5);
+    }
+
+    // Waiter sales (only paid orders)
+    const { data: allPaidOrders } = await supabase.from('orders').select('id, user_id, total_amount').eq('paid', 1);
+    const { data: users } = await supabase.from('users').select('id, name');
+    const userMap = {};
+    (users || []).forEach(u => { userMap[u.id] = u; });
+    const waiterMap = {};
+    (allPaidOrders || []).forEach(o => {
+      const key = o.user_id || 'anon';
+      const name = o.user_id ? (userMap[o.user_id]?.name || 'Garçom') : 'QR Code / Auto-atendimento';
+      if (!waiterMap[key]) waiterMap[key] = { waiter_name: name, total_sales: 0, orders_count: 0 };
+      waiterMap[key].total_sales += o.total_amount || 0;
+      waiterMap[key].orders_count++;
+    });
+    const waiterSales = Object.values(waiterMap).sort((a, b) => b.total_sales - a.total_sales);
+
+    // Low stock
+    const { data: prodsAll } = await supabase.from('products').select('id, name, stock, category');
+    const lowStock = (prodsAll || []).filter(p => p.stock <= 5);
+
+    return json({ total_revenue: totalRev, best_sellers: bestSellers, low_stock: lowStock, payment_methods: paymentMethods, daily_sales: dailySales, waiter_sales: waiterSales });
   }
   if (endpoint.startsWith('/api/reports/closure') && method === 'GET') {
     const { data: txs } = await supabase.from('transactions').select('*');
