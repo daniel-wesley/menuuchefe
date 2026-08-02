@@ -1656,7 +1656,7 @@ export default function CashierDashboard() {
               <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-inner flex flex-col items-center">
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                    `http://${serverIp || window.location.hostname}:${window.location.port || '5173'}/`
+                    `http://${serverIp || window.location.hostname}/`
                   )}`}
                   alt="QR Code de Conexão"
                   className="w-48 h-48"
@@ -1673,7 +1673,7 @@ export default function CashierDashboard() {
                   Endereço de Conexão Manual
                 </span>
                 <code className="text-sm font-extrabold text-zinc-800 dark:text-dark-text select-all">
-                  http://{serverIp || window.location.hostname}:{window.location.port || '5173'}/
+                  http://{serverIp || window.location.hostname}/
                 </code>
               </div>
 
