@@ -296,7 +296,14 @@ export default function WaiterDashboard() {
         return;
       }
 
-      // Clear card, navigate back to tables
+      // Atualiza o status da mesa localmente de imediato (sem aguardar socket/realtime)
+      setTables((prevTables) =>
+        prevTables.map((t) =>
+          t.id === cartTable.id ? { ...t, status: 'occupied' } : t
+        )
+      );
+
+      // Clear cart, navigate back to tables
       clearCart();
       setActiveTab('mesas');
       setSelectedTable(null);
