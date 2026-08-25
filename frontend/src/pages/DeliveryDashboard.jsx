@@ -733,7 +733,11 @@ export default function DeliveryDashboard() {
     finally { setLoading(false); }
   }, [apiFetch]);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  useEffect(() => {
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 5000);
+    return () => clearInterval(interval);
+  }, [fetchOrders]);
 
   // Real-time socket listeners
   useEffect(() => {

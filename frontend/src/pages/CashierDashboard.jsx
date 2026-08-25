@@ -155,6 +155,9 @@ export default function CashierDashboard() {
     loadTables();
     loadLojaInfo();
     loadServerIp();
+
+    const interval = setInterval(loadTables, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   // ── LOAD WITHDRAWALS ────────────────────────────────────────────────

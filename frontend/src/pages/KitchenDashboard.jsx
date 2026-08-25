@@ -46,6 +46,8 @@ export default function KitchenDashboard() {
 
   useEffect(() => {
     loadOrders();
+    const interval = setInterval(loadOrders, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // Synthesize double chime beep locally (works offline, zero external file dependency)

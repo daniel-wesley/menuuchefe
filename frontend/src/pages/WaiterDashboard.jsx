@@ -67,7 +67,7 @@ export default function WaiterDashboard() {
 
   useEffect(() => { checkLicenseStatus(); }, [checkLicenseStatus]);
 
-  // Load initial tables, products and categories
+  // Load initial tables, products and categories + periodic table sync
   useEffect(() => {
     async function loadData() {
       try {
@@ -93,6 +93,19 @@ export default function WaiterDashboard() {
       }
     }
     loadData();
+
+    // Auto-refresh tables every 4 seconds so all tablets see occupied/free tables in real time
+    const interval = setInterval(async () => {
+      try {
+        const tablesRes = await apiFetch('/api/tables');
+        if (tablesRes.ok) {
+          const tablesData = await tablesRes.json();
+          setTables(tablesData);
+        }
+      } catch (_) {}
+    }, 4000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Listen to Socket.io events for real-time table status updates

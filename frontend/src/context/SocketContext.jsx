@@ -27,8 +27,10 @@ export function SocketProvider({ children }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
         async (payload) => {
-          const callbacks = eventListeners.get('order_status_changed') || [];
-          callbacks.forEach(cb => cb(payload.new));
+          if (payload.new) {
+            const callbacks = eventListeners.get('order_status_changed') || [];
+            callbacks.forEach(cb => cb(payload.new));
+          }
 
           if (payload.eventType === 'INSERT' && payload.new) {
             const orderRow = payload.new;
@@ -45,7 +47,7 @@ export function SocketProvider({ children }) {
               const enrichedOrder = {
                 ...orderRow,
                 table_number: tableData?.number || '?',
-                items: (items || []).map(i => ({ ...i, name: i.product?.name || 'Item' }))
+                items: (items || []).map(i => ({ ...i, name: i.product?.name || i.name || 'Item' }))
               };
               const newOrderCallbacks = eventListeners.get('order_received') || [];
               newOrderCallbacks.forEach(cb => cb(enrichedOrder));
@@ -60,8 +62,10 @@ export function SocketProvider({ children }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tables' },
         (payload) => {
-          const callbacks = eventListeners.get('table_status_changed') || [];
-          callbacks.forEach(cb => cb(payload.new));
+          if (payload.new) {
+            const callbacks = eventListeners.get('table_status_changed') || [];
+            callbacks.forEach(cb => cb(payload.new));
+          }
         }
       )
       .on(
@@ -96,7 +100,11 @@ export function SocketProvider({ children }) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Supabase Realtime conectado com sucesso!');
+        }
+      });
 
     const unifiedSocket = {
       emit: (event, data) => {
