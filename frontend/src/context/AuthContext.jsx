@@ -520,11 +520,12 @@ async function handleSupabaseFallback(endpoint, options = {}) {
   if (endpoint.startsWith('/api/orders') && method === 'GET') {
     const queryStr = endpoint.includes('?') ? endpoint.split('?')[1] : '';
     const statusParam = new URLSearchParams(queryStr).get('status');
-    let query = supabase.from('orders').select('*').order('id', { ascending: false });
+    let query = supabase.from('orders').select('*, table:tables(number)').order('id', { ascending: false });
     if (statusParam) query = query.in('status', statusParam.split(','));
     const { data: orders } = await query;
     for (const o of (orders || [])) {
       const { data: items } = await supabase.from('order_items').select('*, product:products(name, price)').eq('order_id', o.id);
+      o.table_number = o.table?.number ?? o.table_number ?? '?';
       o.items = (items || []).map(i => ({ ...i, name: i.product?.name || 'Item' }));
     }
     return json(orders || []);
