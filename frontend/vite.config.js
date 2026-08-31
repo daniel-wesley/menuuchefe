@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/menuuchefe/',
+  base: './',
   plugins: [react()],
   resolve: {
     conditions: ['browser', 'import', 'module', 'default'],
