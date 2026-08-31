@@ -103,12 +103,15 @@ export async function getDailyClosure(req, res) {
     // Filter transactions by the current session's opened_at time
     let transactions;
     let summary;
+    let deliveryRevenue = 0;
+    let deliveryCount = 0;
+
     if (session) {
       transactions = await db.all(
-        `SELECT t.*, COALESCE(tbl.number, 'Delivery') as table_number 
+        `SELECT t.*, COALESCE(tbl.number::text, 'Delivery') as table_number 
          FROM transactions t
          LEFT JOIN tables tbl ON t.table_id = tbl.id
-         WHERE t.created_at >= ?
+         WHERE t.created_at >= $1
          ORDER BY t.created_at DESC`,
         [session.opened_at]
       );
@@ -116,13 +119,23 @@ export async function getDailyClosure(req, res) {
       summary = await db.all(
         `SELECT payment_method, SUM(total_amount) as total, COUNT(*) as count 
          FROM transactions 
-         WHERE created_at >= ?
+         WHERE created_at >= $1
          GROUP BY payment_method`,
         [session.opened_at]
       );
+
+      // Buscar receita de pedidos delivery entregues desde abertura do caixa
+      const deliveryResult = await db.get(
+        `SELECT COALESCE(SUM(total_amount), 0) as total, COUNT(*) as count
+         FROM delivery_orders
+         WHERE status = 'delivered' AND created_at >= $1`,
+        [session.opened_at]
+      );
+      deliveryRevenue = parseFloat(deliveryResult?.total) || 0;
+      deliveryCount = parseInt(deliveryResult?.count) || 0;
     } else {
       transactions = await db.all(
-        `SELECT t.*, COALESCE(tbl.number, 'Delivery') as table_number 
+        `SELECT t.*, COALESCE(tbl.number::text, 'Delivery') as table_number 
          FROM transactions t
          LEFT JOIN tables tbl ON t.table_id = tbl.id
          ORDER BY t.created_at DESC`
@@ -133,9 +146,19 @@ export async function getDailyClosure(req, res) {
          FROM transactions 
          GROUP BY payment_method`
       );
+
+      // Buscar receita de delivery de hoje
+      const deliveryResult = await db.get(
+        `SELECT COALESCE(SUM(total_amount), 0) as total, COUNT(*) as count
+         FROM delivery_orders
+         WHERE status = 'delivered' AND DATE(created_at) = CURRENT_DATE`
+      );
+      deliveryRevenue = parseFloat(deliveryResult?.total) || 0;
+      deliveryCount = parseInt(deliveryResult?.count) || 0;
     }
 
-    const totalRevenue = transactions.reduce((sum, t) => sum + t.total_amount, 0);
+    const tableRevenue = transactions.reduce((sum, t) => sum + parseFloat(t.total_amount || 0), 0);
+    const totalRevenue = tableRevenue + deliveryRevenue;
 
     // Calculate the number of distinct sales (group_id)
     const uniqueSales = new Set();
@@ -154,19 +177,22 @@ export async function getDailyClosure(req, res) {
     let totalWithdrawals = 0;
     if (session) {
       withdrawals = await db.all(
-        `SELECT * FROM cash_withdrawals WHERE cash_register_id = ? ORDER BY created_at DESC`,
+        `SELECT * FROM cash_withdrawals WHERE cash_register_id = $1 ORDER BY created_at DESC`,
         [session.id]
       );
       const withdrawResult = await db.get(
-        `SELECT COALESCE(SUM(amount), 0) as total FROM cash_withdrawals WHERE cash_register_id = ?`,
+        `SELECT COALESCE(SUM(amount), 0) as total FROM cash_withdrawals WHERE cash_register_id = $1`,
         [session.id]
       );
-      totalWithdrawals = withdrawResult.total || 0;
+      totalWithdrawals = parseFloat(withdrawResult?.total) || 0;
     }
 
     res.json({
       date: today,
       session_opened_at: session?.opened_at || null,
+      table_revenue: tableRevenue,
+      delivery_revenue: deliveryRevenue,
+      delivery_count: deliveryCount,
       total_revenue: totalRevenue,
       transactions_count: transactionsCount,
       transactions,
@@ -216,7 +242,7 @@ export async function getAdminDashboardStats(req, res) {
     const dailySales = await db.all(
       `SELECT DATE(created_at) as date, SUM(total_amount) as total 
        FROM transactions 
-       WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+       WHERE created_at >= NOW() - INTERVAL '7 days'
        GROUP BY DATE(created_at)
        ORDER BY date ASC`
     );
@@ -270,9 +296,9 @@ export async function getDetailedReports(req, res) {
 
     if (turn) {
       if (turn === 'lunch') {
-        dateFilter += " AND created_at::time >= '11:00:00'::time AND created_at::time < '16:00:00'::time";
+        dateFilter += " AND EXTRACT(HOUR FROM created_at) >= 11 AND EXTRACT(HOUR FROM created_at) < 16";
       } else if (turn === 'dinner') {
-        dateFilter += " AND (created_at::time >= '16:00:00'::time OR created_at::time < '04:00:00'::time)";
+        dateFilter += " AND (EXTRACT(HOUR FROM created_at) >= 16 OR EXTRACT(HOUR FROM created_at) < 4)";
       }
     }
 
@@ -341,10 +367,10 @@ export async function getDetailedReports(req, res) {
 
     // 6. Mapa de calor por Horário (Rush)
     const rushHours = await db.all(
-      `SELECT EXTRACT(HOUR FROM created_at)::text as hour, COUNT(DISTINCT group_id) as count, SUM(total_amount) as total
+      `SELECT EXTRACT(HOUR FROM created_at)::integer as hour, COUNT(DISTINCT group_id) as count, SUM(total_amount) as total
        FROM transactions 
        WHERE 1=1 ${dateFilter}
-       GROUP BY hour
+       GROUP BY EXTRACT(HOUR FROM created_at)::integer
        ORDER BY hour ASC`,
       params
     );
@@ -430,12 +456,12 @@ export async function getDetailedReports(req, res) {
            WHEN 6 THEN 'Sábado'
          END as day_name,
          EXTRACT(DOW FROM created_at)::integer as day_num,
-         EXTRACT(HOUR FROM created_at)::text as hour,
+         EXTRACT(HOUR FROM created_at)::integer as hour,
          COUNT(DISTINCT group_id) as count,
          SUM(total_amount) as total
        FROM transactions
        WHERE 1=1 ${dateFilter}
-       GROUP BY day_num, hour
+       GROUP BY day_num, EXTRACT(HOUR FROM created_at)::integer
        ORDER BY day_num ASC, hour ASC`,
       params
     );

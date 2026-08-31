@@ -320,16 +320,27 @@ export default function AdminDashboard() {
       if (res.ok) {
         const data = await res.json();
         setDetailedReports({
-          billing_by_method: data?.billing_by_method || [],
-          ticket_medio: data?.ticket_medio || 0,
-          sales_count: data?.sales_count || 0,
-          total_revenue: data?.total_revenue || 0,
-          cancellations: data?.cancellations || [],
-          abc_products: data?.abc_products || [],
-          sales_by_category: data?.sales_by_category || [],
-          rush_hours: data?.rush_hours || [],
-          waiter_performance: data?.waiter_performance || [],
-          avg_prep_time: data?.avg_prep_time || 0
+          billing_by_method:      data?.billing_by_method      || [],
+          ticket_medio:            data?.ticket_medio           || 0,
+          sales_count:             data?.sales_count            || 0,
+          total_revenue:           data?.total_revenue          || 0,
+          cancellations:           data?.cancellations          || [],
+          abc_products:            data?.abc_products           || [],
+          sales_by_category:       data?.sales_by_category      || [],
+          rush_hours:              data?.rush_hours             || [],
+          waiter_performance:      data?.waiter_performance     || [],
+          avg_prep_time:           data?.avg_prep_time          || 0,
+          withdrawals:             data?.withdrawals            || [],
+          total_withdrawals:       data?.total_withdrawals      || 0,
+          net_revenue:             data?.net_revenue            || 0,
+          modality_data:           data?.modality_data          || [],
+          rush_by_day:             data?.rush_by_day            || [],
+          ticket_by_table:         data?.ticket_by_table        || [],
+          tma_by_category:         data?.tma_by_category        || [],
+          complimentary:           data?.complimentary          || [],
+          total_complimentary:     data?.total_complimentary    || 0,
+          cancellations_by_reason: data?.cancellations_by_reason|| [],
+          top5_products:           data?.top5_products          || []
         });
       }
     } catch (err) {
@@ -1373,10 +1384,14 @@ export default function AdminDashboard() {
                   {activeReportTab === 'financeiro' && (
                     <div className="space-y-6">
                       {/* Summary Cards */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="bg-zinc-50 dark:bg-dark-element p-4 rounded-xl">
-                          <span className="text-[10px] font-bold text-zinc-400 block uppercase">Faturamento Líquido</span>
-                          <span className="text-xl font-extrabold text-zinc-850 dark:text-dark-text mt-1 block">R$ {Number(detailedReports.total_revenue || 0).toFixed(2)}</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="bg-emerald-50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 p-4 rounded-xl">
+                          <span className="text-[10px] font-bold text-emerald-600 block uppercase">Faturamento Bruto</span>
+                          <span className="text-xl font-extrabold text-emerald-800 dark:text-emerald-400 mt-1 block">R$ {Number(detailedReports.total_revenue || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="bg-red-50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 p-4 rounded-xl">
+                          <span className="text-[10px] font-bold text-red-600 block uppercase">Sangrias</span>
+                          <span className="text-xl font-extrabold text-red-700 dark:text-red-400 mt-1 block">- R$ {Number(detailedReports.total_withdrawals || 0).toFixed(2)}</span>
                         </div>
                         <div className="bg-zinc-50 dark:bg-dark-element p-4 rounded-xl">
                           <span className="text-[10px] font-bold text-zinc-400 block uppercase">Ticket Médio</span>
@@ -1386,6 +1401,14 @@ export default function AdminDashboard() {
                           <span className="text-[10px] font-bold text-zinc-400 block uppercase">Total Transações</span>
                           <span className="text-xl font-extrabold text-zinc-850 dark:text-dark-text mt-1 block">{detailedReports.sales_count || 0} vendas</span>
                         </div>
+                      </div>
+
+                      {/* Receita Líquida */}
+                      <div className="bg-zinc-900 dark:bg-zinc-800 rounded-xl p-4 flex justify-between items-center">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Receita Líquida (Bruto − Sangrias)</span>
+                        </div>
+                        <span className="text-2xl font-extrabold text-emerald-400">R$ {Number(detailedReports.net_revenue || detailedReports.total_revenue || 0).toFixed(2)}</span>
                       </div>
 
                       <div>
@@ -1685,9 +1708,10 @@ export default function AdminDashboard() {
                                 <div key={day} className="flex items-center mb-1">
                                   <div className="w-20 text-[9px] font-bold text-zinc-500 truncate">{day}</div>
                                   {Array.from({ length: 24 }, (_, hour) => {
-                                    const data = detailedReports.rush_by_day.find(d => d.day_num == dayIdx && d.hour == hour.toString().padStart(2, '0'));
-                                    const count = data ? data.count : 0;
-                                    const maxCount = Math.max(...detailedReports.rush_by_day.map(d => d.count || 0), 1);
+                                    // d.hour é integer (retornado como integer pelo PostgreSQL)
+                                    const data = detailedReports.rush_by_day.find(d => parseInt(d.day_num) === dayIdx && parseInt(d.hour) === hour);
+                                    const count = data ? (parseInt(data.count) || 0) : 0;
+                                    const maxCount = Math.max(...detailedReports.rush_by_day.map(d => parseInt(d.count) || 0), 1);
                                     const intensity = count / maxCount;
                                     const bgColor = count === 0 
                                       ? 'bg-zinc-100 dark:bg-zinc-800' 

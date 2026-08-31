@@ -1361,33 +1361,58 @@ export default function CashierDashboard() {
               </button>
             </div>
             <div className="p-6 overflow-y-auto space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="bg-emerald-50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 p-4 rounded-2xl">
-                  <span className="text-[10px] uppercase font-bold text-emerald-600 block">Faturamento do Caixa</span>
-                  <span className="text-2xl font-extrabold text-emerald-800 dark:text-emerald-400">R$ {closureData.total_revenue?.toFixed(2)}</span>
+                  <span className="text-[10px] uppercase font-bold text-emerald-600 block">Faturamento Total</span>
+                  <span className="text-2xl font-extrabold text-emerald-800 dark:text-emerald-400">R$ {(closureData.total_revenue || 0).toFixed(2)}</span>
                 </div>
                 <div className="bg-red-50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 p-4 rounded-2xl">
                   <span className="text-[10px] uppercase font-bold text-red-600 block">Sangrias</span>
                   <span className="text-2xl font-extrabold text-red-600 dark:text-red-400">- R$ {(closureData.total_withdrawals || 0).toFixed(2)}</span>
                 </div>
                 <div className="bg-zinc-50 dark:bg-dark-element border border-zinc-200 dark:border-dark-border p-4 rounded-2xl">
-                  <span className="text-[10px] uppercase font-bold text-zinc-500 block">Vendas</span>
-                  <span className="text-2xl font-extrabold text-zinc-800 dark:text-dark-text">{closureData.transactions_count} vendas</span>
+                  <span className="text-[10px] uppercase font-bold text-zinc-500 block">Vendas (Mesas)</span>
+                  <span className="text-2xl font-extrabold text-zinc-800 dark:text-dark-text">{closureData.transactions_count} vnd</span>
                 </div>
                 <div className="bg-brand-50 dark:bg-brand-950/10 border border-brand-100 dark:border-brand-900/30 p-4 rounded-2xl">
                   <span className="text-[10px] uppercase font-bold text-brand-600 block">Ticket Médio</span>
                   <span className="text-2xl font-extrabold text-brand-800 dark:text-brand-400">
-                    R$ {closureData.transactions_count > 0 ? (closureData.total_revenue / closureData.transactions_count).toFixed(2) : '0.00'}
+                    R$ {closureData.transactions_count > 0 ? ((closureData.table_revenue || closureData.total_revenue || 0) / closureData.transactions_count).toFixed(2) : '0.00'}
                   </span>
                 </div>
               </div>
+
+              {/* Breakdown Mesas vs Delivery */}
+              {(closureData.delivery_revenue > 0 || closureData.delivery_count > 0) && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white dark:bg-dark-card border border-zinc-200 dark:border-dark-border p-4 rounded-xl flex items-center space-x-3">
+                    <div className="p-2 bg-zinc-100 dark:bg-dark-element rounded-xl">
+                      <Receipt className="h-4 w-4 text-zinc-500" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-zinc-400">Receita Mesas</p>
+                      <p className="text-lg font-extrabold text-zinc-800 dark:text-dark-text">R$ {(closureData.table_revenue || 0).toFixed(2)}</p>
+                    </div>
+                  </div>
+                  <div className="bg-white dark:bg-dark-card border border-brand-200 dark:border-brand-900/40 p-4 rounded-xl flex items-center space-x-3">
+                    <div className="p-2 bg-brand-50 dark:bg-brand-950/20 rounded-xl">
+                      <TrendingUp className="h-4 w-4 text-brand-500" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-brand-500">Receita Delivery</p>
+                      <p className="text-lg font-extrabold text-brand-700 dark:text-brand-400">R$ {(closureData.delivery_revenue || 0).toFixed(2)}</p>
+                      <p className="text-[9px] text-zinc-400">{closureData.delivery_count || 0} pedido(s) entregue(s)</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Resumo Líquido */}
               <div className="bg-zinc-900 dark:bg-zinc-800 rounded-2xl p-5 text-white">
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Receita Líquida</p>
-                    <p className="text-xs text-zinc-400 mt-0.5">Faturamento - Sangrias</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">Total (Mesas + Delivery) − Sangrias</p>
                   </div>
                   <span className="text-2xl font-extrabold text-emerald-400">R$ {(closureData.net_revenue || closureData.total_revenue || 0).toFixed(2)}</span>
                 </div>
