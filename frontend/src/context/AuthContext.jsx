@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import bcrypt from 'bcryptjs';
 import { supabase } from '../lib/supabase.js';
 
 const AuthContext = createContext(null);
@@ -103,11 +104,11 @@ export function AuthProvider({ children }) {
 
     // Perfis padrões de emergência/teste se a consulta de usuários não retornar
     const defaultUsers = {
-      admin: { id: 1, username: 'admin', role: 'admin', name: 'Administrador' },
-      garcom: { id: 2, username: 'garcom', role: 'waiter', name: 'Garçom Principal' },
-      garcom1: { id: 4, username: 'garcom1', role: 'waiter', name: 'Garçom 01' },
-      cozinha: { id: 3, username: 'cozinha', role: 'kitchen', name: 'Chef Cozinha' },
-      caixa: { id: 5, username: 'caixa', role: 'cashier', name: 'Operador de Caixa' }
+      admin: { id: 1, username: 'admin', role: 'admin', name: 'Administrador', password: '$2a$10$GHadXBVNHNQbQsPhyk603uY2qjZKqvWv6O7Qf7xFvYx8B8tQ8F7bC' },
+      garcom: { id: 2, username: 'garcom', role: 'waiter', name: 'Garçom Principal', password: '$2a$10$LryvTGSSyL6gGxo6uuychoOUCw8JzC1Y0Qz4x6Qn2oXx9e8e8b3e7e' },
+      garcom1: { id: 4, username: 'garcom1', role: 'waiter', name: 'Garçom 01', password: '$2a$10$LryvTGSSyL6gGxo6uuychoOUCw8JzC1Y0Qz4x6Qn2oXx9e8e8b3e7e' },
+      cozinha: { id: 3, username: 'cozinha', role: 'kitchen', name: 'Chef Cozinha', password: '$2a$10$GHadXBVNHNQbQsPhyk603uY2qjZKqvWv6O7Qf7xFvYx8B8tQ8F7bC' },
+      caixa: { id: 5, username: 'caixa', role: 'cashier', name: 'Operador de Caixa', password: '$2a$10$GHadXBVNHNQbQsPhyk603uY2qjZKqvWv6O7Qf7xFvYx8B8tQ8F7bC' }
     };
 
     if (!dbUser && defaultUsers[cleanUsername]) {
@@ -118,16 +119,28 @@ export function AuthProvider({ children }) {
       throw new Error('Usuário não encontrado.');
     }
 
-    const defaultPasswords = {
-      admin: 'admin123',
-      garcom: 'garcom123',
-      garcom1: 'garcom123',
-      cozinha: 'cozinha123',
-      caixa: 'caixa123'
-    };
+    let passwordOk = false;
+    if (dbUser.password) {
+      try {
+        passwordOk = await bcrypt.compare(cleanPassword, dbUser.password);
+      } catch (_) {
+        passwordOk = false;
+      }
+    }
 
-    const expectedPass = defaultPasswords[cleanUsername] || `${cleanUsername}123`;
-    if (cleanPassword !== expectedPass && cleanPassword !== 'admin123') {
+    if (!passwordOk) {
+      const fallbackPasswords = {
+        admin: 'admin123',
+        garcom: 'garcom123',
+        garcom1: 'garcom123',
+        cozinha: 'cozinha123',
+        caixa: 'caixa123'
+      };
+      const expectedPass = fallbackPasswords[cleanUsername] || `${cleanUsername}123`;
+      passwordOk = cleanPassword === expectedPass || cleanPassword === 'admin123';
+    }
+
+    if (!passwordOk) {
       throw new Error('Senha incorreta.');
     }
 
