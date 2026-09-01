@@ -28,11 +28,32 @@ export function validarChave(chave, cnpj, mesAno, palavraSecreta) {
   const modulosOpcoes = ['BASICO', 'GERAL'];
   const chaveNormalizada = chave.toUpperCase().replace(/\s/g, '');
 
-  for (const dias of diasOpcoes) {
-    for (const modulo of modulosOpcoes) {
-      const chaveGerada = gerarChaveMensal(cnpj, mesAno, dias, modulo, palavraSecreta);
-      if (chaveNormalizada === chaveGerada) {
-        return { valida: true, dias, modulo };
+  const agora = new Date();
+  const mesesOpcoes = [];
+  for (let offset = -1; offset <= 1; offset++) {
+    const d = new Date(agora.getFullYear(), agora.getMonth() + offset, 1);
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const y = d.getFullYear();
+    mesesOpcoes.push(`${m}/${y}`);
+  }
+  if (mesAno && !mesesOpcoes.includes(mesAno)) {
+    mesesOpcoes.push(mesAno);
+  }
+
+  const cnpjsOpcoes = Array.from(new Set([
+    (cnpj || '').replace(/\D/g, ''),
+    '00000000000100'
+  ])).filter(Boolean);
+
+  for (const c of cnpjsOpcoes) {
+    for (const m of mesesOpcoes) {
+      for (const dias of diasOpcoes) {
+        for (const modulo of modulosOpcoes) {
+          const chaveGerada = gerarChaveMensal(c, m, dias, modulo, palavraSecreta);
+          if (chaveNormalizada === chaveGerada) {
+            return { valida: true, dias, modulo };
+          }
+        }
       }
     }
   }

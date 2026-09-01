@@ -1,38 +1,35 @@
 import { db } from '../config/db.js';
 
-let cachedLicenca = null;
-
 async function getLicenca() {
   try {
     const row = await db.get('SELECT * FROM licenses WHERE id = 1');
     if (row) {
-      cachedLicenca = {
+      return {
         vencimento: row.vencimento,
         emergenciaUsadaEsteMes: row.emergencia_usada_este_mes || '',
         chaveAtual: row.chave_atual || '',
         diasLicenciados: row.dias_licenciados || 0,
         modulo: row.modulo || 'BASICO'
       };
-      return cachedLicenca;
     }
+    console.warn('[Licença] Nenhum registro encontrado na tabela licenses (id=1). Usando padrão de 7 dias.');
   } catch (err) {
-    console.error('Erro ao ler licença do banco:', err.message);
+    console.error('[Licença] Erro ao ler licença do banco:', err.message);
   }
 
+  // Fallback: retorna licença padrão de 7 dias
   const dataVencimento = new Date();
   dataVencimento.setDate(dataVencimento.getDate() + 7);
-  cachedLicenca = {
+  return {
     vencimento: dataVencimento.toISOString(),
     emergenciaUsadaEsteMes: '',
     chaveAtual: '',
     diasLicenciados: 0,
     modulo: 'BASICO'
   };
-  return cachedLicenca;
 }
 
 async function salvarLicenca(licenca) {
-  cachedLicenca = licenca;
   try {
     await db.run(
       `INSERT INTO licenses (id, vencimento, emergencia_usada_este_mes, chave_atual, dias_licenciados, modulo)
@@ -40,8 +37,10 @@ async function salvarLicenca(licenca) {
        ON CONFLICT (id) DO UPDATE SET vencimento=$1, emergencia_usada_este_mes=$2, chave_atual=$3, dias_licenciados=$4, modulo=$5`,
       [licenca.vencimento, licenca.emergenciaUsadaEsteMes || '', licenca.chaveAtual || '', licenca.diasLicenciados || 0, licenca.modulo || 'BASICO']
     );
+    console.log('[Licença] Salva com sucesso no banco. Vencimento:', licenca.vencimento, '| Módulo:', licenca.modulo);
   } catch (err) {
-    console.error('Erro ao salvar licença no banco:', err.message);
+    console.error('[Licença] ERRO ao salvar licença no banco:', err.message);
+    throw err; // Propagar o erro para que o controller saiba que falhou
   }
 }
 

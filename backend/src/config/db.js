@@ -286,6 +286,31 @@ export async function initializeDatabase() {
     )
   `);
 
+  await connection.exec(`
+    CREATE TABLE IF NOT EXISTS licenses (
+      id INTEGER PRIMARY KEY,
+      vencimento TEXT NOT NULL,
+      emergencia_usada_este_mes TEXT DEFAULT '',
+      chave_atual TEXT DEFAULT '',
+      dias_licenciados INTEGER DEFAULT 0,
+      modulo TEXT DEFAULT 'BASICO'
+    )
+  `);
+
+  await connection.exec(`
+    CREATE TABLE IF NOT EXISTS license_keys (
+      id SERIAL PRIMARY KEY,
+      key_code TEXT UNIQUE NOT NULL,
+      cnpj TEXT NOT NULL,
+      mes_ano TEXT NOT NULL,
+      dias INTEGER NOT NULL,
+      modulo TEXT NOT NULL,
+      used BOOLEAN NOT NULL DEFAULT FALSE,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
   await seedDefaultData(connection);
 }
 
@@ -344,5 +369,17 @@ async function seedDefaultData(connection) {
       );
     }
     console.log('Initial products menu seeded.');
+  }
+
+  // Seed default license if not exists
+  const licenseCount = await connection.get('SELECT COUNT(*) as count FROM licenses');
+  if (parseInt(licenseCount.count) === 0) {
+    const dataVencimento = new Date();
+    dataVencimento.setDate(dataVencimento.getDate() + 7);
+    await connection.run(
+      'INSERT INTO licenses (id, vencimento, emergencia_usada_este_mes, chave_atual, dias_licenciados, modulo) VALUES (?, ?, ?, ?, ?, ?)',
+      [1, dataVencimento.toISOString(), '', '', 0, 'BASICO']
+    );
+    console.log('Default license seeded (7-day trial).');
   }
 }

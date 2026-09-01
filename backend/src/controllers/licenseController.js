@@ -21,6 +21,15 @@ function getMesAnoAtual() {
   return `${mes}/${ano}`;
 }
 
+async function getLojaCnpj() {
+  const loja = await db.get('SELECT cnpj FROM loja LIMIT 1');
+  return loja?.cnpj || '';
+}
+
+function formatarCnpj(cnpj) {
+  return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+}
+
 /**
  * GET /api/license/status
  * Retorna o status atual da licença
@@ -59,7 +68,7 @@ export async function activateLicense(req, res) {
       return res.status(400).json({ message: 'Forneça uma chave válida no formato XXXX-XXXX-XXXX.' });
     }
 
-    const cnpj = getCnpj();
+    const cnpj = await getLojaCnpj();
     if (!cnpj) {
       return res.status(400).json({ message: 'CNPJ não configurado. Cadastre os dados da loja primeiro.' });
     }
@@ -69,26 +78,38 @@ export async function activateLicense(req, res) {
 
     const resultado = validarChave(chave, cnpj, mesAno, palavraSecreta);
     if (!resultado.valida) {
-      return res.status(400).json({ message: 'Chave inválida ou não corresponde ao mês atual.' });
+      return res.status(400).json({ message: 'Chave inválida ou não corresponde ao CNPJ e mês atual.' });
     }
+
+    const chaveNormalizada = chave.toUpperCase().trim();
 
     const licenca = await getLicenca();
     const novaData = new Date();
     novaData.setDate(novaData.getDate() + resultado.dias);
 
     licenca.vencimento = novaData.toISOString();
-    licenca.chaveAtual = chave.toUpperCase().trim();
+    licenca.chaveAtual = chaveNormalizada;
     licenca.diasLicenciados = resultado.dias;
     licenca.modulo = resultado.modulo || 'BASICO';
     licenca.emergenciaUsadaEsteMes = '';
     await salvarLicenca(licenca);
+
+    // Se existir tabela license_keys, marca como usada se houver registro
+    try {
+      await db.run(
+        'UPDATE license_keys SET used = TRUE, used_at = NOW() WHERE key_code = $1',
+        [chaveNormalizada]
+      );
+    } catch (_) {}
 
     const diasRestantes = Math.ceil((novaData - new Date()) / (1000 * 60 * 60 * 24));
 
     res.json({
       message: 'Licença ativada com sucesso!',
       vencimento: licenca.vencimento,
-      diasRestantes
+      diasRestantes,
+      diasLicenciados: licenca.diasLicenciados,
+      modulo: licenca.modulo
     });
   } catch (error) {
     console.error('Erro ao ativar licença:', error);
@@ -141,7 +162,7 @@ export async function generateKey(req, res) {
   try {
     const { mesAno, dias, modulo } = req.body;
 
-    const cnpj = getCnpj();
+    const cnpj = await getLojaCnpj();
     if (!cnpj) {
       return res.status(400).json({ message: 'CNPJ não configurado. Cadastre os dados da loja primeiro.' });
     }
@@ -153,9 +174,16 @@ export async function generateKey(req, res) {
 
     const chave = gerarChaveMensal(cnpj, mesAlvo, diasAlvo, moduloAlvo, palavraSecreta);
 
+    await db.run(
+      `INSERT INTO license_keys (key_code, cnpj, mes_ano, dias, modulo, used)
+       VALUES ($1, $2, $3, $4, $5, FALSE)
+       ON CONFLICT (key_code) DO UPDATE SET cnpj = EXCLUDED.cnpj, mes_ano = EXCLUDED.mes_ano, dias = EXCLUDED.dias, modulo = EXCLUDED.modulo`,
+      [chave, cnpj.replace(/\D/g, ''), mesAlvo, diasAlvo, moduloAlvo]
+    );
+
     res.json({
       chave,
-      cnpj: cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5'),
+      cnpj: formatarCnpj(cnpj.replace(/\D/g, '')),
       mesAno: mesAlvo,
       dias: diasAlvo,
       modulo: moduloAlvo
