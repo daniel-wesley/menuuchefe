@@ -175,7 +175,7 @@ export function AuthProvider({ children }) {
           ...options.headers
         };
 
-        if (token) {
+        if (token && !token.startsWith('sb_token_')) {
           headers['Authorization'] = `Bearer ${token}`;
         }
 
@@ -187,6 +187,11 @@ export function AuthProvider({ children }) {
           ...options,
           headers
         });
+
+        if (!response.ok && token?.startsWith('sb_token_') && (options.method || 'GET').toUpperCase() === 'GET') {
+          console.warn(`Requisição ${endpoint} retornou ${response.status}, usando fallback Supabase direto...`);
+          return handleSupabaseFallback(endpoint, options);
+        }
 
         return response;
       } catch (err) {
@@ -771,18 +776,36 @@ async function handleSupabaseFallback(endpoint, options = {}) {
       .single();
     if (error || !order) return json({ message: 'Erro ao criar pedido' }, 400);
     let total = 0;
+    const validatedItems = [];
     if (items && items.length) {
       for (const item of items) {
-        const { data: prod } = await supabase.from('products').select('price').eq('id', item.product_id).single();
+        const { data: prod } = await supabase.from('products').select('id, name, price, print_destination').eq('id', item.product_id).single();
         const price = prod ? prod.price : 0;
         total += price * item.quantity;
         await supabase.from('order_items').insert([{ order_id: order.id, product_id: item.product_id, quantity: item.quantity, price, notes: item.notes }]);
+        validatedItems.push({
+          product_id: item.product_id,
+          name: prod?.name || 'Item',
+          quantity: item.quantity,
+          price,
+          notes: item.notes || '',
+          print_destination: prod?.print_destination || 'cozinha'
+        });
       }
       await supabase.from('orders').update({ total_amount: total }).eq('id', order.id);
       order.total_amount = total;
     }
+    const { data: tableData } = await supabase.from('tables').select('number').eq('id', table_id).single();
+    const kitchenItems = validatedItems.filter(i => i.print_destination === 'cozinha' || i.print_destination === 'ambos');
+    const barItems = validatedItems.filter(i => i.print_destination === 'bar' || i.print_destination === 'ambos');
+    if (kitchenItems.length) {
+      await supabase.from('print_jobs').insert([{ order_id: order.id, table_number: tableData?.number || null, destination: 'cozinha', printer_name: '', items_json: JSON.stringify(kitchenItems), status: 'pending' }]);
+    }
+    if (barItems.length) {
+      await supabase.from('print_jobs').insert([{ order_id: order.id, table_number: tableData?.number || null, destination: 'bar', printer_name: '', items_json: JSON.stringify(barItems), status: 'pending' }]);
+    }
     await supabase.from('tables').update({ status: 'occupied' }).eq('id', table_id);
-    order.items = items || [];
+    order.items = validatedItems;
     return json(order);
   }
 

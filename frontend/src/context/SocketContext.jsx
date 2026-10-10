@@ -25,6 +25,25 @@ export function SocketProvider({ children }) {
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
+        { event: '*', schema: 'public', table: 'print_jobs' },
+        (payload) => {
+          if (payload.eventType === 'INSERT' && payload.new) {
+            let items = [];
+            try {
+              items = typeof payload.new.items_json === 'string' ? JSON.parse(payload.new.items_json) : payload.new.items_json;
+            } catch(e) {}
+            const jobData = { ...payload.new, items };
+            const callbacks = eventListeners.get('new_print_job') || [];
+            callbacks.forEach(cb => cb(jobData));
+          }
+          if (payload.eventType === 'UPDATE' && payload.new) {
+            const callbacks = eventListeners.get('print_job_status_changed') || [];
+            callbacks.forEach(cb => cb(payload.new));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
         async (payload) => {
           if (payload.new) {

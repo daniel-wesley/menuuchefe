@@ -29,6 +29,7 @@ export default function WaiterDashboard() {
   } = useCart();
 
   const [tables, setTables] = useState([]);
+  const [loadingTables, setLoadingTables] = useState(true);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedTable, setSelectedTable] = useState(null); // Table object clicked
@@ -70,11 +71,12 @@ export default function WaiterDashboard() {
   // Load initial tables, products and categories + periodic table sync
   useEffect(() => {
     async function loadData() {
+      setLoadingTables(true);
       try {
         const tablesRes = await apiFetch('/api/tables');
         if (tablesRes.ok) {
           const tablesData = await tablesRes.json();
-          setTables(tablesData);
+          setTables(Array.isArray(tablesData) ? tablesData : []);
         }
 
         const productsRes = await apiFetch('/api/products');
@@ -90,6 +92,8 @@ export default function WaiterDashboard() {
         }
       } catch (err) {
         console.error('Erro ao carregar dados:', err);
+      } finally {
+        setLoadingTables(false);
       }
     }
     loadData();
@@ -100,7 +104,9 @@ export default function WaiterDashboard() {
         const tablesRes = await apiFetch('/api/tables');
         if (tablesRes.ok) {
           const tablesData = await tablesRes.json();
-          setTables(tablesData);
+          if (Array.isArray(tablesData) && tablesData.length > 0) {
+            setTables(tablesData);
+          }
         }
       } catch (_) {}
     }, 4000);
@@ -419,21 +425,32 @@ export default function WaiterDashboard() {
         {/* Tab 1: Mesas Grid */}
         {activeTab === 'mesas' && (
           <div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-              {tables.map((table) => (
-                <button
-                  key={table.id}
-                  onClick={() => setSelectedTable(table)}
-                  className={`flex flex-col items-center justify-center p-6 border-2 rounded-2xl transition-all duration-300 shadow-md ${getTableStatusStyle(table.status)}`}
-                >
-                  <span className="text-sm font-semibold uppercase tracking-widest opacity-60">Mesa</span>
-                  <span className="text-4xl font-extrabold my-2">{table.number}</span>
-                  <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-white/60 dark:bg-zinc-900/40">
-                    {getTableStatusLabel(table.status)}
-                  </span>
-                </button>
-              ))}
-            </div>
+            {loadingTables ? (
+              <div className="py-16 text-center text-zinc-500 dark:text-dark-muted space-y-3">
+                <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="font-semibold text-sm">Carregando mesas...</p>
+              </div>
+            ) : tables.length === 0 ? (
+              <div className="py-16 text-center text-zinc-500 dark:text-dark-muted space-y-3">
+                <p className="font-bold text-base">Nenhuma mesa cadastrada ou encontrada.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                {tables.map((table) => (
+                  <button
+                    key={table.id}
+                    onClick={() => setSelectedTable(table)}
+                    className={`flex flex-col items-center justify-center p-6 border-2 rounded-2xl transition-all duration-300 shadow-md ${getTableStatusStyle(table.status)}`}
+                  >
+                    <span className="text-sm font-semibold uppercase tracking-widest opacity-60">Mesa</span>
+                    <span className="text-4xl font-extrabold my-2">{table.number}</span>
+                    <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-white/60 dark:bg-zinc-900/40">
+                      {getTableStatusLabel(table.status)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Table Details Sidebar/Modal */}
             {selectedTable && (

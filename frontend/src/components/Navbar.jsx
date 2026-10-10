@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { LogOut, Sun, Moon, Utensils, LayoutDashboard, ChefHat, Receipt, Settings, Bike } from 'lucide-react';
+import { useSocket } from '../context/SocketContext.jsx';
+import { LogOut, Sun, Moon, Utensils, LayoutDashboard, ChefHat, Receipt, Settings, Bike, Printer } from 'lucide-react';
+import PrintManagerModal from './PrintManagerModal.jsx';
 
 export default function Navbar() {
   const { user, logout, apiFetch } = useAuth();
+  const socket = useSocket();
   const navigate = useNavigate();
   const location = useLocation();
   const [darkMode, setDarkMode] = useState(() => {
@@ -12,6 +15,7 @@ export default function Navbar() {
     return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
   const [licenseModulo, setLicenseModulo] = useState('BASICO');
+  const [showPrintManager, setShowPrintManager] = useState(false);
 
   useEffect(() => {
     if (darkMode) {
@@ -66,7 +70,6 @@ export default function Navbar() {
     return links;
   };
 
-
   const navLinks = user ? getNavLinks(user.role) : [];
 
   return (
@@ -111,6 +114,17 @@ export default function Navbar() {
 
         {/* User Stats & Toggles */}
         <div className="flex items-center space-x-4">
+          {/* Print Manager Toggle Button */}
+          {user && (user.role === 'admin' || user.role === 'cashier' || user.role === 'kitchen') && (
+            <button
+              onClick={() => setShowPrintManager(true)}
+              className="p-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-dark-element dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-all duration-200 relative"
+              title="Gerenciador de Impressão"
+            >
+              <Printer className="h-5 w-5 text-brand-500" />
+            </button>
+          )}
+
           {/* Dark Mode Switcher */}
           <button
             onClick={() => setDarkMode(!darkMode)}
@@ -145,6 +159,14 @@ export default function Navbar() {
           )}
         </div>
       </div>
+
+      {/* Print Manager Modal */}
+      <PrintManagerModal
+        isOpen={showPrintManager}
+        onClose={() => setShowPrintManager(false)}
+        socket={socket}
+      />
     </header>
   );
 }
+

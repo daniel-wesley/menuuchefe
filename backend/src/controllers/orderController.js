@@ -56,7 +56,8 @@ export async function createOrder(req, res) {
         name: product.name,
         quantity: item.quantity,
         price: product.price,
-        notes: item.notes || ''
+        notes: item.notes || '',
+        print_destination: product.print_destination || 'cozinha'
       });
     }
 
@@ -84,7 +85,50 @@ export async function createOrder(req, res) {
 
     await db.run('COMMIT');
 
-    // 5. Build full order response object
+    // 5. Build print jobs for production locations (cozinha, bar)
+    const storeInfo = await db.get('SELECT * FROM loja ORDER BY id ASC LIMIT 1') || {};
+    const kitchenItems = validatedItems.filter(i => i.print_destination === 'cozinha' || i.print_destination === 'ambos');
+    const barItems = validatedItems.filter(i => i.print_destination === 'bar' || i.print_destination === 'ambos');
+
+    const createdPrintJobs = [];
+
+    if (kitchenItems.length > 0) {
+      const resK = await db.run(
+        `INSERT INTO print_jobs (order_id, table_number, destination, printer_name, items_json, status, created_at)
+         VALUES (?, ?, 'cozinha', ?, ?, 'pending', NOW()) RETURNING id`,
+        [orderId, table.number, storeInfo.printer_cozinha || '', JSON.stringify(kitchenItems)]
+      );
+      createdPrintJobs.push({
+        id: resK.lastID,
+        order_id: orderId,
+        table_number: table.number,
+        destination: 'cozinha',
+        printer_name: storeInfo.printer_cozinha || '',
+        items: kitchenItems,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      });
+    }
+
+    if (barItems.length > 0) {
+      const resB = await db.run(
+        `INSERT INTO print_jobs (order_id, table_number, destination, printer_name, items_json, status, created_at)
+         VALUES (?, ?, 'bar', ?, ?, 'pending', NOW()) RETURNING id`,
+        [orderId, table.number, storeInfo.printer_bar || '', JSON.stringify(barItems)]
+      );
+      createdPrintJobs.push({
+        id: resB.lastID,
+        order_id: orderId,
+        table_number: table.number,
+        destination: 'bar',
+        printer_name: storeInfo.printer_bar || '',
+        items: barItems,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      });
+    }
+
+    // 6. Build full order response object
     const createdOrder = {
       id: orderId,
       table_id,
@@ -97,11 +141,13 @@ export async function createOrder(req, res) {
       items: validatedItems
     };
 
-    // 6. Broadcast Real-Time socket events
+    // 7. Broadcast Real-Time socket events
     const io = req.app.get('io');
     if (io) {
-      // Emit to kitchen room and general receivers
       io.emit('order_received', createdOrder);
+      for (const job of createdPrintJobs) {
+        io.emit('new_print_job', job);
+      }
       io.emit('table_status_changed', { id: table_id, number: table.number, status: table.status, token: table.token });
     }
 

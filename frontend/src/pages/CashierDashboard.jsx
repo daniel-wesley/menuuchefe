@@ -66,6 +66,9 @@ export default function CashierDashboard() {
   const [serverIp, setServerIp] = useState('');
   const [showQrModal, setShowQrModal] = useState(false);
 
+  // Impressora selecionada nas configurações (Supabase DB + localStorage)
+  const selectedCupomPrinter = lojaInfo?.printer_cupom || localStorage.getItem('printer_cupom') || '';
+
   // ── SANGRIA (WITHDRAWAL) STATE ─────────────────────────────────────────
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -342,6 +345,10 @@ export default function CashierDashboard() {
         });
         setSelectedTable(null);
         setShowReceiptModal(true);
+        // Impressão automática após exibir o cupom
+        setTimeout(() => {
+          window.print();
+        }, 800);
         loadTables();
       } else {
         const err = await res.json();
@@ -1259,82 +1266,114 @@ export default function CashierDashboard() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white max-w-sm w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col text-zinc-800 border">
             <div className="p-4 bg-zinc-50 border-b flex justify-between items-center">
-              <span className="font-extrabold text-sm">DAV — Mesa {receiptData.table_number}</span>
+              <div>
+                <span className="font-extrabold text-sm">DAV — Mesa {receiptData.table_number}</span>
+                {selectedCupomPrinter && (
+                  <p className="text-[10px] text-emerald-600 font-bold flex items-center space-x-1 mt-0.5">
+                    <Printer className="h-3 w-3" />
+                    <span>{selectedCupomPrinter}</span>
+                  </p>
+                )}
+              </div>
               <button onClick={() => setShowReceiptModal(false)} className="p-1 rounded bg-zinc-200 hover:bg-zinc-300">
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="p-6 bg-zinc-100 flex justify-center overflow-y-auto">
-              <div id="receipt-print-area" className="w-[58mm] bg-white text-black p-4 font-mono shadow border text-[9px] leading-relaxed">
-                <div className="text-center font-bold">
-                  <p className="text-xs uppercase">{lojaInfo.nome_fantasia || '*** MENU CHEF ***'}</p>
-                  {lojaInfo.cnpj && <p>CNPJ: {lojaInfo.cnpj}</p>}
-                  {lojaInfo.ie && <p>IE: {lojaInfo.ie}</p>}
-                  {lojaInfo.endereco && <p className="text-[8px]">{lojaInfo.endereco}</p>}
-                  {lojaInfo.telefone && <p>TEL: {lojaInfo.telefone}</p>}
+              <div id="receipt-print-area" className="w-[57mm] bg-white text-black p-3 font-sans shadow border text-[11px] leading-snug">
+                <div className="text-center font-black">
+                  <p className="text-sm uppercase tracking-wide">{lojaInfo.nome_fantasia || '*** MENU CHEF ***'}</p>
+                  {lojaInfo.cnpj && <p className="text-[10px] font-semibold">CNPJ: {lojaInfo.cnpj}</p>}
+                  {lojaInfo.ie && <p className="text-[10px] font-semibold">IE: {lojaInfo.ie}</p>}
+                  {lojaInfo.endereco && <p className="text-[10px] leading-tight font-semibold">{lojaInfo.endereco}</p>}
+                  {lojaInfo.telefone && <p className="text-[10px] font-semibold">TEL: {lojaInfo.telefone}</p>}
                 </div>
-                <p className="text-center font-bold mt-2">D A V</p>
-                <p className="text-center font-bold text-[8px]">da Nota Fiscal de Consumidor Eletrônica</p>
-                <div className="text-center my-2 border-t border-b border-dashed border-black py-1">
-                  <p className="text-[8px] font-bold tracking-wider uppercase">Não tem valor fiscal</p>
+                <div className="text-center mt-2 font-black">
+                  <p className="text-xs tracking-widest">D A V</p>
+                  <p className="text-[9px] font-bold">Documento Auxiliar de Venda</p>
                 </div>
-                <p className="flex justify-between"><span>DAV Nº:</span><span className="font-bold">{receiptData.dav_number}</span></p>
-                <p className="flex justify-between text-[8px]"><span>Data/Hora:</span><span>{receiptData.date}</span></p>
-                <p className="flex justify-between text-[8px]"><span>Terminal:</span><span>001</span></p>
-                <p className="text-center">--------------------------------</p>
-                <p className="font-bold flex justify-between text-[8px]">
-                  <span>ITEM CÓD.   DESC.</span>
-                  <span>QTD  VL.TOTAL</span>
+                <div className="text-center my-1.5 border-t border-b border-dashed border-black py-1">
+                  <p className="text-[9px] font-extrabold tracking-wider uppercase">NÃO TEM VALOR FISCAL</p>
+                </div>
+                <div className="space-y-0.5 text-[11px]">
+                  <p className="flex justify-between"><span>DAV Nº:</span><span className="font-extrabold text-xs">{receiptData.dav_number}</span></p>
+                  <p className="flex justify-between text-[10px]"><span>Data/Hora:</span><span className="font-semibold">{receiptData.date}</span></p>
+                  <p className="flex justify-between text-[10px]"><span>Terminal:</span><span>001</span></p>
+                </div>
+                <div className="border-t border-dashed border-black my-1.5" />
+                <p className="font-extrabold flex justify-between text-[10px] uppercase">
+                  <span>ITEM DESC.</span>
+                  <span>QTD  TOTAL</span>
                 </p>
-                <p className="text-center">--------------------------------</p>
+                <div className="border-t border-dashed border-black my-1" />
                 <div className="space-y-1">
                   {receiptData.orders.map((order) =>
                     order.items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between text-[8px]">
-                        <span className="truncate pr-1">{String(idx + 1).padStart(2, '0')} {item.name?.substring(0, 18)}</span>
-                        <span className="flex-shrink-0 font-bold">{item.quantity}x R${(item.price * item.quantity).toFixed(2)}</span>
+                      <div key={idx} className="text-[11px]">
+                        <div className="flex justify-between font-bold">
+                          <span className="truncate pr-1">{String(idx + 1).padStart(2, '0')} {item.name}</span>
+                          <span className="flex-shrink-0 font-extrabold">{item.quantity}x R${(item.price * item.quantity).toFixed(2)}</span>
+                        </div>
+                        {item.notes && <p className="text-[9px] italic pl-2 text-zinc-700">Obs: {item.notes}</p>}
                       </div>
                     ))
                   )}
                 </div>
-                <p className="text-center">--------------------------------</p>
-                <p className="flex justify-between"><span>Valor Produtos:</span><span>R$ {receiptData.subtotal.toFixed(2)}</span></p>
-                {receiptData.service_charge > 0 && (
-                  <p className="flex justify-between"><span>Acréscimos:</span><span>R$ {receiptData.service_charge.toFixed(2)}</span></p>
-                )}
-                <p className="font-bold flex justify-between"><span>VALOR À PAGAR:</span><span>R$ {receiptData.total.toFixed(2)}</span></p>
-                {receiptData.split_count > 1 && (
-                  <p className="flex justify-between text-[8px]"><span>Por pessoa ({receiptData.split_count}x):</span><span>R$ {(receiptData.total / receiptData.split_count).toFixed(2)}</span></p>
-                )}
-                <p className="text-center">--------------------------------</p>
-                <p className="font-bold">PAGAMENTO:</p>
-                {receiptData.payments.map((p, i) => (
-                  <p key={i} className="flex justify-between">
-                    <span>{getMethodEmoji(p.method)} {getMethodLabel(p.method)}:</span>
-                    <span>R$ {Number(p.amount).toFixed(2)}</span>
+                <div className="border-t border-dashed border-black my-1.5" />
+                <div className="space-y-0.5 text-[11px]">
+                  <p className="flex justify-between font-semibold"><span>Subtotal:</span><span>R$ {receiptData.subtotal.toFixed(2)}</span></p>
+                  {receiptData.service_charge > 0 && (
+                    <p className="flex justify-between font-semibold"><span>Acréscimos:</span><span>R$ {receiptData.service_charge.toFixed(2)}</span></p>
+                  )}
+                  <p className="font-black text-xs flex justify-between pt-1 border-t border-black">
+                    <span>VALOR À PAGAR:</span>
+                    <span>R$ {receiptData.total.toFixed(2)}</span>
                   </p>
-                ))}
-                {receiptData.payments.reduce((s, p) => s + Number(p.amount), 0) > receiptData.total && (
-                  <p className="flex justify-between font-bold">
-                    <span>TROCO:</span>
-                    <span>R$ {(receiptData.payments.reduce((s, p) => s + Number(p.amount), 0) - receiptData.total).toFixed(2)}</span>
-                  </p>
-                )}
-                <p className="text-center">--------------------------------</p>
-                <p className="text-center text-[8px]">Qtd Total de Itens: {receiptData.orders.reduce((acc, o) => acc + o.items.reduce((a, i) => a + i.quantity, 0), 0)}</p>
-                <div className="text-center my-3 border-t border-b border-dashed border-black py-2">
-                  <p className="text-[10px] font-black tracking-widest uppercase">
+                  {receiptData.split_count > 1 && (
+                    <p className="flex justify-between text-[10px] font-semibold"><span>Por pessoa ({receiptData.split_count}x):</span><span>R$ {(receiptData.total / receiptData.split_count).toFixed(2)}</span></p>
+                  )}
+                </div>
+                <div className="border-t border-dashed border-black my-1.5" />
+                <p className="font-extrabold text-[11px] uppercase">PAGAMENTO:</p>
+                <div className="space-y-0.5 text-[11px]">
+                  {receiptData.payments.map((p, i) => (
+                    <p key={i} className="flex justify-between font-bold">
+                      <span>{getMethodEmoji(p.method)} {getMethodLabel(p.method)}:</span>
+                      <span>R$ {Number(p.amount).toFixed(2)}</span>
+                    </p>
+                  ))}
+                  {receiptData.payments.reduce((s, p) => s + Number(p.amount), 0) > receiptData.total && (
+                    <p className="flex justify-between font-extrabold text-xs pt-0.5">
+                      <span>TROCO:</span>
+                      <span>R$ {(receiptData.payments.reduce((s, p) => s + Number(p.amount), 0) - receiptData.total).toFixed(2)}</span>
+                    </p>
+                  )}
+                </div>
+                <div className="border-t border-dashed border-black my-1.5" />
+                <p className="text-center text-[10px] font-extrabold">Qtd Total de Itens: {receiptData.orders.reduce((acc, o) => acc + o.items.reduce((a, i) => a + i.quantity, 0), 0)}</p>
+                <div className="text-center my-2 border-t border-b border-dashed border-black py-1.5">
+                  <p className="text-[10px] font-black tracking-wider uppercase">
                     *** NÃO É VÁLIDO COMO CUPOM FISCAL ***
                   </p>
                 </div>
-                <p className="text-center font-bold text-[8px] uppercase">Obrigado pela preferência!</p>
-                <p className="text-center font-bold text-[8px] uppercase">Volte Sempre!</p>
+                <div className="text-center font-bold text-[10px] uppercase space-y-0.5">
+                  <p>Obrigado pela preferência!</p>
+                  <p>Volte Sempre!</p>
+                </div>
               </div>
             </div>
             <div className="p-4 border-t bg-zinc-50 flex space-x-2">
-              <button onClick={() => window.print()} className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5">
-                <Printer className="h-4 w-4" />
-                <span>Imprimir DAV</span>
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl text-xs flex flex-col items-center justify-center space-y-0.5"
+              >
+                <div className="flex items-center space-x-1.5">
+                  <Printer className="h-4 w-4" />
+                  <span>Imprimir DAV</span>
+                </div>
+                {selectedCupomPrinter && (
+                  <span className="text-[9px] opacity-80 font-normal">{selectedCupomPrinter}</span>
+                )}
               </button>
               <button onClick={() => setShowReceiptModal(false)} className="flex-1 py-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-700 font-bold rounded-xl text-xs">
                 Fechar

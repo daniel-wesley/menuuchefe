@@ -21,6 +21,7 @@ import licenseRoutes from './routes/licenseRoutes.js';
 import globalObservationRoutes from './routes/globalObservationRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
 import davRoutes from './routes/davRoutes.js';
+import printJobRoutes from './routes/printJobRoutes.js';
 import { checkLicense, checkModuloGeral } from './middleware/checkLicense.js';
 
 dotenv.config();
@@ -68,6 +69,7 @@ app.use('/api/license', licenseRoutes);
 app.use('/api/global-observations', globalObservationRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/dav', davRoutes);
+app.use('/api/print-jobs', printJobRoutes);
 
 // Endpoint para obter o IP de rede local do servidor
 app.get('/api/device-ip', (req, res) => {

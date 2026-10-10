@@ -56,7 +56,7 @@ export async function getProductById(req, res) {
 }
 
 export async function createProduct(req, res) {
-  const { name, price, description, category, stock, track_stock, observations, active } = req.body;
+  const { name, price, description, category, stock, track_stock, observations, active, print_destination } = req.body;
 
   if (!name || !price || !category) {
     return res.status(400).json({ message: 'Nome, preço e categoria são obrigatórios.' });
@@ -70,8 +70,8 @@ export async function createProduct(req, res) {
   try {
     const db = await getDbConnection();
     const result = await db.run(
-      `INSERT INTO products (name, price, description, image_url, category, stock, track_stock, observations, active) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO products (name, price, description, image_url, category, stock, track_stock, observations, active, print_destination) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
         name,
         parseFloat(price),
@@ -81,7 +81,8 @@ export async function createProduct(req, res) {
         parseInt(stock) || 0,
         track_stock === 'false' || track_stock === '0' || track_stock === 0 ? 0 : 1,
         observations || null,
-        active !== undefined ? (active ? 1 : 0) : 1
+        active !== undefined ? (active ? 1 : 0) : 1,
+        print_destination || 'cozinha'
       ]
     );
 
@@ -95,7 +96,8 @@ export async function createProduct(req, res) {
       stock: parseInt(stock) || 0,
       track_stock: track_stock === 'false' || track_stock === '0' || track_stock === 0 ? 0 : 1,
       observations: observations || null,
-      active: active !== undefined ? (active ? 1 : 0) : 1
+      active: active !== undefined ? (active ? 1 : 0) : 1,
+      print_destination: print_destination || 'cozinha'
     };
 
     res.status(201).json(newProduct);
@@ -107,7 +109,7 @@ export async function createProduct(req, res) {
 
 export async function updateProduct(req, res) {
   const { id } = req.params;
-  const { name, price, description, category, stock, track_stock, observations, image_url: newImageUrl, active } = req.body;
+  const { name, price, description, category, stock, track_stock, observations, image_url: newImageUrl, active, print_destination } = req.body;
 
   if (!name || !price || !category) {
     return res.status(400).json({ message: 'Nome, preço e categoria são obrigatórios.' });
@@ -135,10 +137,11 @@ export async function updateProduct(req, res) {
     }
 
     const activeValue = active !== undefined ? (active ? 1 : 0) : (product.active !== undefined ? product.active : 1);
+    const printDest = print_destination || product.print_destination || 'cozinha';
 
     await db.run(
       `UPDATE products 
-       SET name = ?, price = ?, description = ?, image_url = ?, category = ?, stock = ?, track_stock = ?, observations = ?, active = ?
+       SET name = ?, price = ?, description = ?, image_url = ?, category = ?, stock = ?, track_stock = ?, observations = ?, active = ?, print_destination = ?
        WHERE id = ?`,
       [
         name,
@@ -150,6 +153,7 @@ export async function updateProduct(req, res) {
         track_stock === 'false' || track_stock === '0' || track_stock === 0 ? 0 : 1,
         observations || null,
         activeValue,
+        printDest,
         id
       ]
     );
@@ -164,7 +168,8 @@ export async function updateProduct(req, res) {
       stock: parseInt(stock) || 0,
       track_stock: track_stock === 'false' || track_stock === '0' || track_stock === 0 ? 0 : 1,
       observations: observations || null,
-      active: activeValue
+      active: activeValue,
+      print_destination: printDest
     };
 
     res.json(updatedProduct);

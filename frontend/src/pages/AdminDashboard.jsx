@@ -6,7 +6,7 @@ import {
   BarChart3, Plus, Edit, Trash2, Users, ShieldAlert, Package, 
   Settings, Grid, FileSpreadsheet, DollarSign, ShoppingBag, 
   TrendingUp, RefreshCw, Upload, Image, Check, X, AlertTriangle,
-  Eye, Key, Shield, Clock, ChevronDown, MessageSquare, Tags, QrCode
+  Eye, Key, Shield, Clock, ChevronDown, MessageSquare, Tags, QrCode, Printer, ChefHat, Wine
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -104,8 +104,73 @@ export default function AdminDashboard() {
     track_stock: true,
     active: true,
     image: null,
-    observations: []
+    observations: [],
+    print_destination: 'cozinha' // 'cozinha', 'bar', 'ambos'
   });
+
+  // Printer state (stored in localStorage)
+  const [availablePrinters, setAvailablePrinters] = useState([]);
+  const [selectedCupomPrinter, setSelectedCupomPrinter] = useState(() => localStorage.getItem('printer_cupom') || '');
+  const [selectedCozinhaPrinter, setSelectedCozinhaPrinter] = useState(() => localStorage.getItem('printer_cozinha') || '');
+  const [selectedBarPrinter, setSelectedBarPrinter] = useState(() => localStorage.getItem('printer_bar') || '');
+  const [loadingPrinters, setLoadingPrinters] = useState(false);
+
+  const loadPrinters = async () => {
+    setLoadingPrinters(true);
+    try {
+      if (window.electron?.getPrinters) {
+        // Electron mode: get real OS printers
+        const printers = await window.electron.getPrinters();
+        setAvailablePrinters(printers);
+      } else {
+        // Browser mode: use window.print API — list via CSS
+        const list = [];
+        if (typeof window !== 'undefined') {
+          // Try experimental Chromium API
+          if (navigator.userAgentData && window.showOpenFilePicker === undefined) {
+            // fallback
+          }
+          // Try Web Print API (Chrome >= 125 flag)
+          if (window.print) {
+            list.push({ name: 'Impressora Padrão do Sistema' });
+          }
+        }
+        setAvailablePrinters(list);
+      }
+    } catch (err) {
+      console.error('Erro ao listar impressoras:', err);
+      setAvailablePrinters([{ name: 'Impressora Padrão do Sistema' }]);
+    } finally {
+      setLoadingPrinters(false);
+    }
+  };
+
+  const savePrinterSettings = async () => {
+    localStorage.setItem('printer_cupom', selectedCupomPrinter);
+    localStorage.setItem('printer_cozinha', selectedCozinhaPrinter);
+    localStorage.setItem('printer_bar', selectedBarPrinter);
+
+    try {
+      const payload = {
+        ...lojaForm,
+        printer_cupom: selectedCupomPrinter,
+        printer_cozinha: selectedCozinhaPrinter,
+        printer_bar: selectedBarPrinter
+      };
+      const res = await apiFetch('/api/loja', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        alert('Configurações de impressora salvas no banco de dados e localmente com sucesso!');
+      } else {
+        alert('Configurações salvas localmente, mas houve um erro ao sincronizar com o banco.');
+      }
+    } catch (err) {
+      console.error('Erro ao salvar impressoras no banco:', err);
+      alert('Configurações de impressora salvas localmente!');
+    }
+  };
 
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null); // User object if editing
@@ -186,6 +251,18 @@ export default function AdminDashboard() {
           ie: data.ie || '',
           endereco: data.endereco || ''
         });
+        if (data.printer_cupom !== undefined && data.printer_cupom !== null) {
+          setSelectedCupomPrinter(data.printer_cupom);
+          if (data.printer_cupom) localStorage.setItem('printer_cupom', data.printer_cupom);
+        }
+        if (data.printer_cozinha !== undefined && data.printer_cozinha !== null) {
+          setSelectedCozinhaPrinter(data.printer_cozinha);
+          if (data.printer_cozinha) localStorage.setItem('printer_cozinha', data.printer_cozinha);
+        }
+        if (data.printer_bar !== undefined && data.printer_bar !== null) {
+          setSelectedBarPrinter(data.printer_bar);
+          if (data.printer_bar) localStorage.setItem('printer_bar', data.printer_bar);
+        }
       }
     } catch (err) {
       console.error('Erro ao carregar dados da empresa:', err);
@@ -196,9 +273,15 @@ export default function AdminDashboard() {
     e.preventDefault();
     setLoading(true);
     try {
+      const payload = {
+        ...lojaForm,
+        printer_cupom: selectedCupomPrinter,
+        printer_cozinha: selectedCozinhaPrinter,
+        printer_bar: selectedBarPrinter
+      };
       const res = await apiFetch('/api/loja', {
         method: 'POST',
-        body: JSON.stringify(lojaForm)
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         alert('Dados da empresa salvos com sucesso!');
@@ -486,6 +569,7 @@ export default function AdminDashboard() {
     loadLoja();
     loadLicenseStatus();
     loadGlobalObservations();
+    loadPrinters();
   }, []);
 
   useEffect(() => {
@@ -599,6 +683,7 @@ export default function AdminDashboard() {
         active: productForm.active ? 1 : 0,
         observations: JSON.stringify(productForm.observations || []),
         image_url: imageUrl,
+        print_destination: productForm.print_destination || 'cozinha',
       };
 
       let res;
@@ -628,7 +713,8 @@ export default function AdminDashboard() {
           track_stock: true,
           active: true,
           image: null,
-          observations: []
+          observations: [],
+          print_destination: 'cozinha'
         });
         loadProducts();
         loadStats();
@@ -654,7 +740,8 @@ export default function AdminDashboard() {
       track_stock: prod.track_stock === 1,
       active: prod.active !== 0,
       image: null,
-      observations: prod.observations ? JSON.parse(prod.observations) : []
+      observations: prod.observations ? JSON.parse(prod.observations) : [],
+      print_destination: prod.print_destination || 'cozinha'
     });
     setShowProductModal(true);
   };
@@ -2794,6 +2881,136 @@ export default function AdminDashboard() {
                 <span>{loading ? 'Salvando...' : 'Salvar Dados da Loja'}</span>
               </button>
             </form>
+
+            {/* ── CONFIGURAÇÃO DE IMPRESSORAS ─────────────────────────── */}
+            <div className="mt-8 border-t border-zinc-200 dark:border-dark-border pt-8">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="font-extrabold text-lg text-zinc-900 dark:text-dark-text flex items-center space-x-2">
+                    <Printer className="h-5 w-5 text-brand-500" />
+                    <span>Configuração de Impressoras</span>
+                  </h3>
+                  <p className="text-xs font-semibold text-zinc-400 mt-1">
+                    Selecione as impressoras instaladas no Windows para cada destino. As configurações são salvas localmente neste computador.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadPrinters}
+                  disabled={loadingPrinters}
+                  className="flex items-center space-x-1.5 px-3 py-2 bg-zinc-100 dark:bg-dark-element hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-xl text-xs font-bold text-zinc-600 dark:text-dark-muted transition"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingPrinters ? 'animate-spin' : ''}`} />
+                  <span>{loadingPrinters ? 'Buscando...' : 'Atualizar Lista'}</span>
+                </button>
+              </div>
+
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-xl px-4 py-3 mb-6 flex items-start space-x-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                  O sistema usa <strong>window.print()</strong> do navegador para imprimir. A impressora padrão do Windows será usada automaticamente. Para impressoras térmicas (80mm), configure-a como padrão no Windows antes de imprimir.
+                  Ao clicar em "Salvar Configurações", o nome selecionado é guardado para identificação visual.
+                </p>
+              </div>
+
+              <div className="max-w-xl space-y-5">
+                {/* Impressora do Cupom / Caixa */}
+                <div className="bg-white dark:bg-dark-card border border-zinc-200 dark:border-dark-border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 bg-brand-100 dark:bg-brand-950/30 rounded-lg">
+                      <Printer className="h-4 w-4 text-brand-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-extrabold text-zinc-800 dark:text-dark-text uppercase tracking-wide">Impressora do Cupom (Caixa)</p>
+                      <p className="text-[10px] text-zinc-400">Usada ao finalizar vendas / DAV</p>
+                    </div>
+                  </div>
+                  <select
+                    value={selectedCupomPrinter}
+                    onChange={(e) => setSelectedCupomPrinter(e.target.value)}
+                    className="block w-full p-3 border border-zinc-200 dark:border-dark-border rounded-xl bg-zinc-50 dark:bg-dark-element text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-zinc-900 dark:text-dark-text"
+                  >
+                    <option value="">-- Impressora Padrão do Windows --</option>
+                    {availablePrinters.map((p, i) => (
+                      <option key={i} value={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+                  {selectedCupomPrinter && (
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center space-x-1">
+                      <Check className="h-3 w-3" />
+                      <span>Selecionada: {selectedCupomPrinter}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Impressora da Cozinha */}
+                <div className="bg-white dark:bg-dark-card border border-zinc-200 dark:border-dark-border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 bg-orange-100 dark:bg-orange-950/30 rounded-lg">
+                      <ChefHat className="h-4 w-4 text-orange-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-extrabold text-zinc-800 dark:text-dark-text uppercase tracking-wide">Impressora da Cozinha</p>
+                      <p className="text-[10px] text-zinc-400">Pedidos marcados como "Cozinha" ou "Ambos"</p>
+                    </div>
+                  </div>
+                  <select
+                    value={selectedCozinhaPrinter}
+                    onChange={(e) => setSelectedCozinhaPrinter(e.target.value)}
+                    className="block w-full p-3 border border-zinc-200 dark:border-dark-border rounded-xl bg-zinc-50 dark:bg-dark-element text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-zinc-900 dark:text-dark-text"
+                  >
+                    <option value="">-- Impressora Padrão do Windows --</option>
+                    {availablePrinters.map((p, i) => (
+                      <option key={i} value={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+                  {selectedCozinhaPrinter && (
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center space-x-1">
+                      <Check className="h-3 w-3" />
+                      <span>Selecionada: {selectedCozinhaPrinter}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Impressora do Bar */}
+                <div className="bg-white dark:bg-dark-card border border-zinc-200 dark:border-dark-border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 bg-purple-100 dark:bg-purple-950/30 rounded-lg">
+                      <Wine className="h-4 w-4 text-purple-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-extrabold text-zinc-800 dark:text-dark-text uppercase tracking-wide">Impressora do Bar</p>
+                      <p className="text-[10px] text-zinc-400">Pedidos marcados como "Bar" ou "Ambos"</p>
+                    </div>
+                  </div>
+                  <select
+                    value={selectedBarPrinter}
+                    onChange={(e) => setSelectedBarPrinter(e.target.value)}
+                    className="block w-full p-3 border border-zinc-200 dark:border-dark-border rounded-xl bg-zinc-50 dark:bg-dark-element text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-zinc-900 dark:text-dark-text"
+                  >
+                    <option value="">-- Impressora Padrão do Windows --</option>
+                    {availablePrinters.map((p, i) => (
+                      <option key={i} value={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+                  {selectedBarPrinter && (
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center space-x-1">
+                      <Check className="h-3 w-3" />
+                      <span>Selecionada: {selectedBarPrinter}</span>
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={savePrinterSettings}
+                  className="w-full py-3.5 bg-zinc-900 dark:bg-zinc-700 hover:bg-zinc-800 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition duration-200 shadow-md"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span>Salvar Configurações de Impressoras</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -3164,6 +3381,47 @@ export default function AdminDashboard() {
                     })}
                   </div>
                 )}
+              </div>
+
+              {/* Destino de Impressão */}
+              <div className="pt-2 border-t border-zinc-200 dark:border-dark-border mt-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-dark-muted mb-3">
+                  Imprimir Pedido Deste Produto em:
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { value: 'cozinha', label: 'Cozinha', icon: ChefHat, color: 'orange' },
+                    { value: 'bar', label: 'Bar', icon: Wine, color: 'purple' },
+                    { value: 'ambos', label: 'Cozinha + Bar', icon: Printer, color: 'brand' },
+                  ].map(({ value, label, icon: Icon, color }) => {
+                    const isSelected = productForm.print_destination === value;
+                    const colorMap = {
+                      orange: isSelected ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20' : 'border-zinc-200 bg-zinc-50 hover:bg-orange-50/50',
+                      purple: isSelected ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/20' : 'border-zinc-200 bg-zinc-50 hover:bg-purple-50/50',
+                      brand:  isSelected ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/20'  : 'border-zinc-200 bg-zinc-50 hover:bg-brand-50/50',
+                    };
+                    const iconColor = {
+                      orange: isSelected ? 'text-orange-500' : 'text-zinc-400',
+                      purple: isSelected ? 'text-purple-500' : 'text-zinc-400',
+                      brand:  isSelected ? 'text-brand-500'  : 'text-zinc-400',
+                    };
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setProductForm({ ...productForm, print_destination: value })}
+                        className={`flex flex-col items-center p-3 border-2 rounded-xl cursor-pointer transition space-y-1.5 ${colorMap[color]}`}
+                      >
+                        <Icon className={`h-5 w-5 ${iconColor[color]}`} />
+                        <span className={`text-[10px] font-extrabold uppercase text-center leading-tight ${isSelected ? `text-${color === 'brand' ? 'brand' : color}-700 dark:text-${color === 'brand' ? 'brand' : color}-400` : 'text-zinc-500'}`}>
+                          {label}
+                        </span>
+                        {isSelected && <Check className="h-3 w-3 text-emerald-500" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-zinc-400 mt-2">Quando um pedido contiver este produto, ele será enviado para a impressora correspondente.</p>
               </div>
 
               {/* Action Buttons */}

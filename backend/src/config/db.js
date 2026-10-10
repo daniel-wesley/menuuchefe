@@ -125,9 +125,53 @@ export async function initializeDatabase() {
       category TEXT NOT NULL,
       stock INTEGER NOT NULL DEFAULT 0,
       track_stock INTEGER NOT NULL DEFAULT 1,
-      observations TEXT
+      observations TEXT,
+      print_destination TEXT NOT NULL DEFAULT 'cozinha'
     )
   `);
+
+  // Add print_destination column if it doesn't exist (migration for existing DBs)
+  try {
+    await connection.exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_destination TEXT NOT NULL DEFAULT 'cozinha'`);
+  } catch(e) { /* column already exists */ }
+
+  await connection.exec(`
+    CREATE TABLE IF NOT EXISTS loja (
+      id SERIAL PRIMARY KEY,
+      nome_fantasia TEXT,
+      telefone TEXT,
+      cnpj TEXT,
+      ie TEXT,
+      endereco TEXT,
+      pix_key TEXT,
+      printer_cupom TEXT DEFAULT '',
+      printer_cozinha TEXT DEFAULT '',
+      printer_bar TEXT DEFAULT '',
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  try {
+    await connection.exec(`ALTER TABLE loja ADD COLUMN IF NOT EXISTS printer_cupom TEXT DEFAULT ''`);
+    await connection.exec(`ALTER TABLE loja ADD COLUMN IF NOT EXISTS printer_cozinha TEXT DEFAULT ''`);
+    await connection.exec(`ALTER TABLE loja ADD COLUMN IF NOT EXISTS printer_bar TEXT DEFAULT ''`);
+  } catch(e) { /* columns already exist */ }
+
+  await connection.exec(`
+    CREATE TABLE IF NOT EXISTS print_jobs (
+      id SERIAL PRIMARY KEY,
+      order_id INTEGER,
+      table_number INTEGER,
+      destination TEXT NOT NULL,
+      printer_name TEXT,
+      items_json TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      error_message TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      printed_at TIMESTAMPTZ
+    )
+  `);
+
 
   await connection.exec(`
     CREATE TABLE IF NOT EXISTS categories (
