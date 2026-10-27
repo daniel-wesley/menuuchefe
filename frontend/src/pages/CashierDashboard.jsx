@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import Navbar from '../components/Navbar.jsx';
+import { printDavReceipt, formatCurrency, getPaymentLabel } from '../lib/thermalPrinter.js';
 import {
   Receipt, Landmark, Users, CreditCard, DollarSign, QrCode,
   Printer, CheckCircle, X, Archive, Plus, Trash2, AlertCircle,
@@ -54,7 +55,30 @@ export default function CashierDashboard() {
   const [splitCount, setSplitCount] = useState(1);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
+  const [receiptPaperWidth, setReceiptPaperWidth] = useState(() => localStorage.getItem('receipt_paper_width') || '80mm');
   const [licenseBlocked, setLicenseBlocked] = useState(false);
+
+  const togglePaperWidth = () => {
+    const next = receiptPaperWidth === '80mm' ? '58mm' : '80mm';
+    setReceiptPaperWidth(next);
+    localStorage.setItem('receipt_paper_width', next);
+  };
+
+  const handlePrintReceipt = async (customData) => {
+    const data = customData || receiptData;
+    if (!data) return;
+    try {
+      await printDavReceipt({
+        receiptData: data,
+        lojaInfo,
+        paperWidth: receiptPaperWidth,
+        cutSpacingMm: receiptPaperWidth === '58mm' ? 14 : 20
+      });
+    } catch (err) {
+      console.error('Falha na impressão térmica:', err);
+      window.print();
+    }
+  };
 
   const [lojaInfo, setLojaInfo] = useState({
     nome_fantasia: '',
@@ -330,7 +354,7 @@ export default function CashierDashboard() {
         const davRes = await apiFetch('/api/dav/next-number');
         const davData = davRes.ok ? await davRes.json() : { dav_number: '000000', dav_code: '001', period: '' };
 
-        setReceiptData({
+        const davObj = {
           table_number: selectedTable.number,
           orders: billingDetails.orders,
           subtotal: subtotal,
@@ -342,13 +366,14 @@ export default function CashierDashboard() {
           date: new Date().toLocaleString('pt-BR'),
           dav_number: davData.dav_number,
           dav_code: davData.dav_code,
-        });
+        };
+        setReceiptData(davObj);
         setSelectedTable(null);
         setShowReceiptModal(true);
-        // Impressão automática após exibir o cupom
+        // Impressão automática com largura ajustada e corte a 2cm
         setTimeout(() => {
-          window.print();
-        }, 800);
+          handlePrintReceipt(davObj);
+        }, 600);
         loadTables();
       } else {
         const err = await res.json();
@@ -1261,10 +1286,10 @@ export default function CashierDashboard() {
         </div>
       )}
 
-      {/* MODAL: Cupom */}
+      {/* MODAL: Cupom / DAV */}
       {showReceiptModal && receiptData && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white max-w-sm w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col text-zinc-800 border">
+          <div className="bg-white max-w-md w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col text-zinc-800 border">
             <div className="p-4 bg-zinc-50 border-b flex justify-between items-center">
               <div>
                 <span className="font-extrabold text-sm">DAV — Mesa {receiptData.table_number}</span>
@@ -1275,107 +1300,157 @@ export default function CashierDashboard() {
                   </p>
                 )}
               </div>
-              <button onClick={() => setShowReceiptModal(false)} className="p-1 rounded bg-zinc-200 hover:bg-zinc-300">
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={togglePaperWidth}
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg bg-zinc-200 hover:bg-zinc-300 text-zinc-800 transition flex items-center space-x-1"
+                  title="Clique para alternar entre 80mm e 58mm"
+                >
+                  <span>Bobina:</span>
+                  <span className="text-brand-600 uppercase font-black">{receiptPaperWidth}</span>
+                </button>
+                <button onClick={() => setShowReceiptModal(false)} className="p-1 rounded bg-zinc-200 hover:bg-zinc-300">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-            <div className="p-6 bg-zinc-100 flex justify-center overflow-y-auto">
-              <div id="receipt-print-area" className="w-[57mm] bg-white text-black p-3 font-sans shadow border text-[11px] leading-snug">
+            <div className="p-6 bg-zinc-100 flex justify-center overflow-y-auto max-h-[75vh]">
+              <div
+                id="receipt-print-area"
+                className={`${receiptPaperWidth === '58mm' ? 'w-[58mm] paper-58mm text-[10px] leading-tight p-3' : 'w-[78mm] paper-80mm text-[12px] leading-snug p-4'} bg-white text-black font-mono shadow-md border border-zinc-300`}
+              >
+                {/* CABEÇALHO DA LOJA */}
                 <div className="text-center font-black">
-                  <p className="text-sm uppercase tracking-wide">{lojaInfo.nome_fantasia || '*** MENU CHEF ***'}</p>
-                  {lojaInfo.cnpj && <p className="text-[10px] font-semibold">CNPJ: {lojaInfo.cnpj}</p>}
-                  {lojaInfo.ie && <p className="text-[10px] font-semibold">IE: {lojaInfo.ie}</p>}
-                  {lojaInfo.endereco && <p className="text-[10px] leading-tight font-semibold">{lojaInfo.endereco}</p>}
-                  {lojaInfo.telefone && <p className="text-[10px] font-semibold">TEL: {lojaInfo.telefone}</p>}
+                  <p className={`${receiptPaperWidth === '58mm' ? 'text-sm' : 'text-base'} uppercase tracking-wide leading-tight text-black`}>{lojaInfo.nome_fantasia || '*** MENU CHEF ***'}</p>
+                  {lojaInfo.cnpj && <p className="text-[10px] font-bold mt-0.5 text-black">CNPJ: {lojaInfo.cnpj}</p>}
+                  {lojaInfo.ie && <p className="text-[10px] font-bold text-black">IE: {lojaInfo.ie}</p>}
+                  {lojaInfo.endereco && <p className="text-[10px] leading-tight font-bold text-black mt-0.5">{lojaInfo.endereco}</p>}
+                  {lojaInfo.telefone && <p className="text-[10px] font-bold text-black">TEL: {lojaInfo.telefone}</p>}
                 </div>
+
+                {/* TÍTULO DAV */}
                 <div className="text-center mt-2 font-black">
-                  <p className="text-xs tracking-widest">D A V</p>
-                  <p className="text-[9px] font-bold">Documento Auxiliar de Venda</p>
+                  <p className={`${receiptPaperWidth === '58mm' ? 'text-xs' : 'text-sm'} tracking-widest text-black`}>D A V</p>
+                  <p className="text-[10px] font-bold text-black">Documento Auxiliar de Venda</p>
                 </div>
-                <div className="text-center my-1.5 border-t border-b border-dashed border-black py-1">
-                  <p className="text-[9px] font-extrabold tracking-wider uppercase">NÃO TEM VALOR FISCAL</p>
+
+                <div className="text-center my-1.5 border-t border-b border-dashed border-black py-0.5">
+                  <p className="text-[10px] font-black tracking-wider uppercase text-black">NÃO TEM VALOR FISCAL</p>
                 </div>
-                <div className="space-y-0.5 text-[11px]">
-                  <p className="flex justify-between"><span>DAV Nº:</span><span className="font-extrabold text-xs">{receiptData.dav_number}</span></p>
-                  <p className="flex justify-between text-[10px]"><span>Data/Hora:</span><span className="font-semibold">{receiptData.date}</span></p>
-                  <p className="flex justify-between text-[10px]"><span>Terminal:</span><span>001</span></p>
+
+                {/* DADOS DA VENDA */}
+                <div className="space-y-0.5 text-[10px] font-bold text-black">
+                  <p className="flex justify-between"><span>DAV Nº:</span><span className="font-black text-xs">{receiptData.dav_number || '00001'}</span></p>
+                  <p className="flex justify-between"><span>Data/Hora:</span><span>{receiptData.date || new Date().toLocaleString('pt-BR')}</span></p>
+                  <p className="flex justify-between"><span>Terminal:</span><span>001</span></p>
+                  {receiptData.table_number && (
+                    <p className="flex justify-between"><span>Mesa:</span><span>Mesa {receiptData.table_number}</span></p>
+                  )}
+                  {receiptData.client_cpf && (
+                    <p className="flex justify-between"><span>CPF:</span><span>{receiptData.client_cpf}</span></p>
+                  )}
                 </div>
+
                 <div className="border-t border-dashed border-black my-1.5" />
-                <p className="font-extrabold flex justify-between text-[10px] uppercase">
-                  <span>ITEM DESC.</span>
+                <p className="font-black flex justify-between text-[10px] uppercase text-black">
+                  <span>ITEM DESCRIÇÃO</span>
                   <span>QTD  TOTAL</span>
                 </p>
                 <div className="border-t border-dashed border-black my-1" />
-                <div className="space-y-1">
-                  {receiptData.orders.map((order) =>
-                    order.items.map((item, idx) => (
-                      <div key={idx} className="text-[11px]">
-                        <div className="flex justify-between font-bold">
-                          <span className="truncate pr-1">{String(idx + 1).padStart(2, '0')} {item.name}</span>
-                          <span className="flex-shrink-0 font-extrabold">{item.quantity}x R${(item.price * item.quantity).toFixed(2)}</span>
+
+                {/* LISTAGEM DE ITENS SEM TRUNCAR NOMES */}
+                <div className={`${receiptPaperWidth === '58mm' ? 'space-y-1' : 'space-y-1.5'} text-black`}>
+                  {receiptData.orders?.map((order) =>
+                    order.items?.map((item, idx) => (
+                      <div key={idx} className={`${receiptPaperWidth === '58mm' ? 'text-[10px]' : 'text-[12px]'} font-bold py-0.5`}>
+                        <div className="break-words">
+                          <span>{String(idx + 1).padStart(2, '0')} {item.name}</span>
                         </div>
-                        {item.notes && <p className="text-[9px] italic pl-2 text-zinc-700">Obs: {item.notes}</p>}
+                        <div className="flex justify-between text-[10px] pl-2 font-bold mt-0.5">
+                          <span>{item.quantity}x R$ {formatCurrency(item.price)}</span>
+                          <span className="font-black">R$ {formatCurrency(item.price * item.quantity)}</span>
+                        </div>
+                        {item.notes && <p className="text-[9px] italic pl-2 text-black">Obs: {item.notes}</p>}
                       </div>
                     ))
                   )}
                 </div>
+
+                {/* TOTALIZADORES */}
                 <div className="border-t border-dashed border-black my-1.5" />
-                <div className="space-y-0.5 text-[11px]">
-                  <p className="flex justify-between font-semibold"><span>Subtotal:</span><span>R$ {receiptData.subtotal.toFixed(2)}</span></p>
+                <div className="space-y-0.5 text-[10px] font-bold text-black">
+                  <p className="flex justify-between"><span>Subtotal:</span><span>R$ {formatCurrency(receiptData.subtotal)}</span></p>
                   {receiptData.service_charge > 0 && (
-                    <p className="flex justify-between font-semibold"><span>Acréscimos:</span><span>R$ {receiptData.service_charge.toFixed(2)}</span></p>
+                    <p className="flex justify-between"><span>Acréscimos (10%):</span><span>R$ {formatCurrency(receiptData.service_charge)}</span></p>
                   )}
-                  <p className="font-black text-xs flex justify-between pt-1 border-t border-black">
-                    <span>VALOR À PAGAR:</span>
-                    <span>R$ {receiptData.total.toFixed(2)}</span>
-                  </p>
+                  <div className="border-t-2 border-b-2 border-black py-1 my-1">
+                    <p className={`${receiptPaperWidth === '58mm' ? 'text-xs' : 'text-sm'} font-black flex justify-between text-black`}>
+                      <span>VALOR À PAGAR:</span>
+                      <span>R$ {formatCurrency(receiptData.total)}</span>
+                    </p>
+                  </div>
                   {receiptData.split_count > 1 && (
-                    <p className="flex justify-between text-[10px] font-semibold"><span>Por pessoa ({receiptData.split_count}x):</span><span>R$ {(receiptData.total / receiptData.split_count).toFixed(2)}</span></p>
+                    <p className="flex justify-between text-[10px]"><span>Por pessoa ({receiptData.split_count}x):</span><span>R$ {formatCurrency(receiptData.total / receiptData.split_count)}</span></p>
                   )}
                 </div>
+
+                {/* PAGAMENTOS */}
                 <div className="border-t border-dashed border-black my-1.5" />
-                <p className="font-extrabold text-[11px] uppercase">PAGAMENTO:</p>
-                <div className="space-y-0.5 text-[11px]">
-                  {receiptData.payments.map((p, i) => (
-                    <p key={i} className="flex justify-between font-bold">
-                      <span>{getMethodEmoji(p.method)} {getMethodLabel(p.method)}:</span>
-                      <span>R$ {Number(p.amount).toFixed(2)}</span>
+                <p className="font-black text-[10px] uppercase text-black">FORMA DE PAGAMENTO:</p>
+                <div className="space-y-0.5 text-[10px] font-bold text-black">
+                  {receiptData.payments?.map((p, i) => (
+                    <p key={i} className="flex justify-between">
+                      <span>{getPaymentLabel(p.method)}:</span>
+                      <span>R$ {formatCurrency(p.amount)}</span>
                     </p>
                   ))}
-                  {receiptData.payments.reduce((s, p) => s + Number(p.amount), 0) > receiptData.total && (
-                    <p className="flex justify-between font-extrabold text-xs pt-0.5">
+                  {receiptData.payments?.reduce((s, p) => s + Number(p.amount), 0) > receiptData.total && (
+                    <p className="flex justify-between font-black text-xs pt-0.5 text-black">
                       <span>TROCO:</span>
-                      <span>R$ {(receiptData.payments.reduce((s, p) => s + Number(p.amount), 0) - receiptData.total).toFixed(2)}</span>
+                      <span>R$ {formatCurrency(receiptData.payments.reduce((s, p) => s + Number(p.amount), 0) - receiptData.total)}</span>
                     </p>
                   )}
                 </div>
+
+                {/* AVISOS FINAIS */}
                 <div className="border-t border-dashed border-black my-1.5" />
-                <p className="text-center text-[10px] font-extrabold">Qtd Total de Itens: {receiptData.orders.reduce((acc, o) => acc + o.items.reduce((a, i) => a + i.quantity, 0), 0)}</p>
-                <div className="text-center my-2 border-t border-b border-dashed border-black py-1.5">
-                  <p className="text-[10px] font-black tracking-wider uppercase">
+                <p className="text-center text-[10px] font-black text-black">
+                  Qtd. Total de Itens: {receiptData.orders?.reduce((acc, o) => acc + (o.items || []).reduce((a, i) => a + (i.quantity || 1), 0), 0) || 0}
+                </p>
+                <div className="text-center my-1.5 border-t border-b border-dashed border-black py-0.5">
+                  <p className="text-[9px] font-black tracking-wider uppercase text-black">
                     *** NÃO É VÁLIDO COMO CUPOM FISCAL ***
                   </p>
                 </div>
-                <div className="text-center font-bold text-[10px] uppercase space-y-0.5">
+                <div className="text-center font-bold text-[10px] uppercase space-y-0.5 text-black">
                   <p>Obrigado pela preferência!</p>
                   <p>Volte Sempre!</p>
+                </div>
+
+                {/* INDICAÇÃO VISUAL DO AVANÇO */}
+                <div className="mt-2.5 pt-2 border-t border-dotted border-zinc-400 text-center text-[10px] text-zinc-500 flex flex-col items-center justify-center space-y-1">
+                  <span>✂ Fim da impressão (corte a {receiptPaperWidth === '58mm' ? '1.4 cm' : '2 cm'})</span>
+                  <div className={`${receiptPaperWidth === '58mm' ? 'h-[14mm]' : 'h-[20mm]'} w-full bg-zinc-100 border border-dashed border-zinc-300 rounded flex items-center justify-center text-[9px] text-zinc-400`}>
+                    Avanço de corte: {receiptPaperWidth === '58mm' ? '1.4 cm' : '2 cm'}
+                  </div>
                 </div>
               </div>
             </div>
             <div className="p-4 border-t bg-zinc-50 flex space-x-2">
               <button
-                onClick={() => window.print()}
-                className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl text-xs flex flex-col items-center justify-center space-y-0.5"
+                onClick={() => handlePrintReceipt()}
+                className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl text-xs flex flex-col items-center justify-center space-y-0.5 shadow-md shadow-brand-500/20 transition"
               >
                 <div className="flex items-center space-x-1.5">
                   <Printer className="h-4 w-4" />
-                  <span>Imprimir DAV</span>
+                  <span>Imprimir DAV ({receiptPaperWidth})</span>
                 </div>
                 {selectedCupomPrinter && (
                   <span className="text-[9px] opacity-80 font-normal">{selectedCupomPrinter}</span>
                 )}
               </button>
-              <button onClick={() => setShowReceiptModal(false)} className="flex-1 py-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-700 font-bold rounded-xl text-xs">
+              <button onClick={() => setShowReceiptModal(false)} className="flex-1 py-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-700 font-bold rounded-xl text-xs transition">
                 Fechar
               </button>
             </div>

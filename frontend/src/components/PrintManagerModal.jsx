@@ -100,25 +100,41 @@ export default function PrintManagerModal({ isOpen, onClose, socket }) {
         )
         .join('');
 
+      const is58mm = configuredPaperWidth === '58mm';
+      const printWidth = is58mm ? '48mm' : '72mm';
+      const cutSpacing = is58mm ? '14mm' : '20mm';
+
       const doc = printWindow.contentDocument || printWindow.contentWindow.document;
       doc.open();
       doc.write(`
+        <!DOCTYPE html>
         <html>
           <head>
+            <meta charset="UTF-8">
             <style>
-              @page { size: 57mm auto; margin: 0; }
-              body { font-family: sans-serif; width: 57mm; padding: 6px; color: #000; margin: 0; }
+              @page { size: auto; margin: 0mm; }
+              * { box-sizing: border-box; margin: 0; padding: 0; }
+              body { 
+                font-family: 'Courier New', Courier, monospace; 
+                width: ${printWidth}; 
+                padding: 2mm 1mm ${cutSpacing} 1mm; 
+                color: #000; 
+                margin: 0 auto; 
+                -webkit-font-smoothing: antialiased;
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+              }
               .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 6px; }
               .title { font-size: 16px; font-weight: 900; text-transform: uppercase; }
-              .sub { font-size: 13px; font-weight: bold; }
-              .footer { border-top: 1px dashed #000; margin-top: 8px; padding-top: 4px; text-align: center; font-size: 10px; font-weight: bold; }
+              .sub { font-size: 14px; font-weight: 900; margin-top: 2px; }
+              .footer { border-top: 1px dashed #000; margin-top: 8px; padding-top: 4px; text-align: center; font-size: 11px; font-weight: bold; }
             </style>
           </head>
           <body>
             <div class="header">
               <div class="title">*** ${job.destination?.toUpperCase()} ***</div>
               <div class="sub">MESA ${job.table_number || '?'}</div>
-              <div style="font-size: 10px;">${new Date(job.created_at || Date.now()).toLocaleTimeString('pt-BR')}</div>
+              <div style="font-size: 11px; font-weight: bold; margin-top: 2px;">${new Date(job.created_at || Date.now()).toLocaleTimeString('pt-BR')}</div>
             </div>
             ${itemsHtml}
             <div class="footer">

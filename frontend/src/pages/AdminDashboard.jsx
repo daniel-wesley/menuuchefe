@@ -6,7 +6,7 @@ import {
   BarChart3, Plus, Edit, Trash2, Users, ShieldAlert, Package, 
   Settings, Grid, FileSpreadsheet, DollarSign, ShoppingBag, 
   TrendingUp, RefreshCw, Upload, Image, Check, X, AlertTriangle,
-  Eye, Key, Shield, Clock, ChevronDown, MessageSquare, Tags, QrCode, Printer, ChefHat, Wine
+  Eye, Key, Shield, Clock, ChevronDown, MessageSquare, Tags, QrCode, Printer, ChefHat, Wine, Receipt
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -113,6 +113,7 @@ export default function AdminDashboard() {
   const [selectedCupomPrinter, setSelectedCupomPrinter] = useState(() => localStorage.getItem('printer_cupom') || '');
   const [selectedCozinhaPrinter, setSelectedCozinhaPrinter] = useState(() => localStorage.getItem('printer_cozinha') || '');
   const [selectedBarPrinter, setSelectedBarPrinter] = useState(() => localStorage.getItem('printer_bar') || '');
+  const [receiptPaperWidth, setReceiptPaperWidth] = useState(() => localStorage.getItem('receipt_paper_width') || '80mm');
   const [loadingPrinters, setLoadingPrinters] = useState(false);
 
   const loadPrinters = async () => {
@@ -149,6 +150,7 @@ export default function AdminDashboard() {
     localStorage.setItem('printer_cupom', selectedCupomPrinter);
     localStorage.setItem('printer_cozinha', selectedCozinhaPrinter);
     localStorage.setItem('printer_bar', selectedBarPrinter);
+    localStorage.setItem('receipt_paper_width', receiptPaperWidth);
 
     try {
       const payload = {
@@ -2914,6 +2916,32 @@ export default function AdminDashboard() {
               </div>
 
               <div className="max-w-xl space-y-5">
+                {/* Largura da Bobina Térmica */}
+                <div className="bg-white dark:bg-dark-card border border-zinc-200 dark:border-dark-border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 bg-indigo-100 dark:bg-indigo-950/30 rounded-lg">
+                      <Receipt className="h-4 w-4 text-indigo-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-extrabold text-zinc-800 dark:text-dark-text uppercase tracking-wide">Largura da Bobina Térmica (DAV)</p>
+                      <p className="text-[10px] text-zinc-400">Define a largura e o avanço da impressão térmica</p>
+                    </div>
+                  </div>
+                  <select
+                    value={receiptPaperWidth}
+                    onChange={(e) => setReceiptPaperWidth(e.target.value)}
+                    className="block w-full p-3 border border-zinc-200 dark:border-dark-border rounded-xl bg-zinc-50 dark:bg-dark-element text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-zinc-900 dark:text-dark-text font-bold"
+                  >
+                    <option value="80mm">80mm — Bobina Padrão (Larga, 72mm imprimível)</option>
+                    <option value="58mm">58mm — Bobina Estreita (Mini Térmica, 48mm imprimível)</option>
+                  </select>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    {receiptPaperWidth === '80mm'
+                      ? '✓ Formato padrão para bobinas largas de 80mm (com avanço exato de 2 cm ao final).'
+                      : '✓ Formato compacto para mini impressoras térmicas de 58mm.'}
+                  </p>
+                </div>
+
                 {/* Impressora do Cupom / Caixa */}
                 <div className="bg-white dark:bg-dark-card border border-zinc-200 dark:border-dark-border rounded-xl p-4 space-y-3">
                   <div className="flex items-center space-x-2">
